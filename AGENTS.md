@@ -151,13 +151,29 @@ loaa/
 ### Commit Guidelines
 
 Follow strict commit message format:
-- **Imperative mood**: "Add feature" not "Added feature"
-- **Capitalize first letter**: "Fix bug" not "fix bug"
-- **No period at end**: "Update docs" not "Update docs."
-- **Under 50 characters**: Keep it concise
-- **One logical change per commit**: Don't mix features
 
-See CLAUDE.md for full commit guidelines.
+**Format:**
+- **Title only** - No body, no additional content
+- **Imperative mood** - "Add feature" not "Added feature" or "Adds feature"
+- **Capitalize first letter** - "Fix bug" not "fix bug"
+- **No period at end** - "Update docs" not "Update docs."
+- **Under 50 characters** - Keep it concise and scannable
+- **One logical change per commit** - Don't mix features
+
+**Examples:**
+- ✅ `Add user authentication`
+- ✅ `Fix memory leak in worker pool`
+- ✅ `Update dependencies to latest versions`
+- ❌ `added user authentication` (not imperative, not capitalized)
+- ❌ `Fixes the memory leak in the worker pool that was causing issues` (too long)
+- ❌ `Update docs.` (has period)
+- ❌ Any commit with body text or multiple lines
+
+**Critical:** Use `git commit -m "Title"` NOT `git commit -m "$(cat <<EOF ...)"` with heredoc.
+The title is the ONLY content. No attribution, no body, no Co-Authored-By, no emojis.
+
+**Rationale:**
+Short, imperative commits create a clean, scannable git history. Each commit should represent a single logical change that can be described in one concise line.
 
 ### Testing Strategy
 
