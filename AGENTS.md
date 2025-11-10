@@ -6,6 +6,166 @@ This file provides guidance to AI coding agents when working with code in this r
 
 Loa'a is a chore and rewards tracking system that helps kids stay motivated through a gamified task completion system with monetary rewards.
 
+**Key Documentation:**
+- `docs/vision.md` - Problem statement, goals, and philosophy
+- `docs/roadmap.md` - Phased rollout plan and timeline
+- `docs/architecture.md` - Technical decisions and structure
+
+**Current Phase:** Phase 1 (MVP) - Single-user local application
+
+## Working on This Project
+
+### Before You Start
+
+1. **Read the docs** - Start with `docs/vision.md` and `docs/roadmap.md` to understand context
+2. **Check current phase** - We're building Phase 1 MVP features only
+3. **Review Priority 1 issues** - These are foundational work
+4. **Understand the scope** - Don't build Phase 2+ features yet
+
+### Development Principles
+
+**Start Simple:**
+- Implement the minimal working version first
+- Don't prematurely optimize
+- Validate core mechanics before adding complexity
+
+**Local-First:**
+- Everything runs on the parent's laptop
+- No deployment complexity for MVP
+- Embedded database (no server process)
+
+**Rust Best Practices:**
+- Use `anyhow` for error handling with context
+- Prefer explicit types over type inference where it aids clarity
+- Write tests for business logic in `loaa-core`
+- Keep web UI and core logic separate
+
+**Tech Stack:**
+- **Leptos** for web (SSR + hydration)
+- **SurrealDB** for database (embedded mode)
+- **Workspace structure** (core/web/mcp)
+
+### What NOT to Build (Yet)
+
+These are explicitly deferred to later phases:
+
+**Phase 2+ Features:**
+- Multi-user authentication
+- Kids logging in themselves
+- Approval workflows
+- Task prerequisites
+- Dynamic bounties
+- Rewards redemption
+
+If you find yourself implementing these, stop and check the roadmap.
+
+### Money Handling
+
+**Critical:** Use `rust_decimal::Decimal` for all monetary values, never floats.
+
+```rust
+use rust_decimal::Decimal;
+
+// Good
+let value = Decimal::from_str("1.50")?;
+
+// Bad - DO NOT DO THIS
+let value = 1.5_f64;  // Causes rounding errors!
+```
+
+### Data Model Guidelines
+
+**Phase 1 Entities:**
+- `Kid` - A child in the household
+- `Task` - A chore with a value and cadence
+- `LedgerEntry` - A transaction (earned/adjusted)
+
+See `docs/architecture.md` for detailed data model documentation.
+
+### Workspace Structure
+
+```
+loaa/
+├── crates/
+│   ├── core/       # Business logic, data models, database
+│   ├── web/        # Leptos web application
+│   └── mcp/        # MCP server for AI integration
+```
+
+**Import Rules:**
+- `core` → depends on nothing (pure business logic)
+- `web` → depends on `core`
+- `mcp` → depends on `core`
+- Never import web or mcp into core
+
+### Commit Guidelines
+
+Follow strict commit message format:
+- **Imperative mood**: "Add feature" not "Added feature"
+- **Capitalize first letter**: "Fix bug" not "fix bug"
+- **No period at end**: "Update docs" not "Update docs."
+- **Under 50 characters**: Keep it concise
+- **One logical change per commit**: Don't mix features
+
+See CLAUDE.md for full commit guidelines.
+
+### Testing Strategy
+
+**Unit Tests:**
+- Test all business logic in `loaa-core`
+- Test data model validation
+- Test helper methods
+
+**Integration Tests:**
+- Test database operations
+- Test full workflows (create task → complete → check balance)
+
+**E2E Tests:**
+- Not needed for MVP
+- Add later when UI stabilizes
+
+### When to Create Issues
+
+Create new issues when you:
+- Discover a bug while working
+- Find missing functionality needed for current task
+- Identify technical debt that should be addressed
+
+Link new issues to their parent:
+```bash
+bd create "Fix validation bug" -p 1 --deps discovered-from:loaa-ycs
+```
+
+### Pivot Points
+
+Be aware of places where we might change direction:
+
+**After Leptos setup:**
+- If Leptos feels too complex → consider Axum + HTMX
+- Document issues in the issue description
+
+**After SurrealDB integration:**
+- If SurrealDB causes problems → consider SQLite
+- Keep database abstraction clean for easy swap
+
+**During development:**
+- If the concept doesn't resonate with the family → pivot
+- Document learnings in `docs/`
+
+### Getting Help
+
+**Resources:**
+- Check existing docs in `docs/`
+- Review related beads issues
+- Consult architecture docs for technical decisions
+- Look at Leptos book: https://book.leptos.dev/
+- SurrealDB docs: https://surrealdb.com/docs
+
+**Don't Assume:**
+- When in doubt about scope, check roadmap
+- When uncertain about design, check architecture docs
+- When unclear about priorities, check issue priorities
+
 ## Issue Tracking with bd (beads)
 
 **IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or other tracking methods.
