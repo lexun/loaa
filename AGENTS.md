@@ -45,6 +45,56 @@ Loa'a is a chore and rewards tracking system that helps kids stay motivated thro
 - **SurrealDB** for database (embedded mode)
 - **Workspace structure** (core/web/mcp)
 
+### Code Quality Standards
+
+**Always Fix Compilation Errors and Warnings:**
+- **Zero tolerance policy**: All code must compile without errors or warnings
+- Never leave compilation errors "for later" - fix them immediately
+- Treat warnings as errors - they often indicate real problems
+- Use `cargo clippy` and `cargo fmt` to maintain code quality
+- Run `cargo check` frequently during development
+
+**Code Quality Philosophy:**
+- **Do the right thing**: Prioritize clean code and optimal architecture over speed
+- **No shortcuts**: Take whatever time is necessary to make correct decisions
+- **Sustainable pace**: Better to do it right once than fix it multiple times
+
+**When Working on Issues:**
+
+**Discovering Improvements:**
+- If you notice something that should be cleaned up or refactored while working on an issue:
+  1. Create a new beads issue for the improvement
+  2. Link it with `discovered-from` dependency to the current issue
+  3. Continue with your current work
+  4. Address the improvement in a separate issue later
+
+**Substantial Refactoring:**
+- If you realize a substantial refactor would greatly simplify your current work:
+  1. **Stash your current changes** (or commit to a WIP branch)
+  2. **Create a new beads issue** for the refactoring work
+  3. **Complete the refactoring** - implement, test, commit, and close the issue
+  4. **Return to original work** - you may need to start over, but the codebase is now cleaner
+  5. The refactoring makes the original work easier and more correct
+
+**Why This Approach:**
+- Keeps the codebase clean and maintainable
+- Prevents accumulating technical debt
+- Makes future work easier
+- Ensures each commit is meaningful and correct
+- Maintains architectural integrity
+
+**Example Workflow:**
+```bash
+# Working on loaa-123, discover need for refactor
+git stash
+bd create "Refactor database connection handling" -p 1 --deps discovered-from:loaa-123
+bd update loaa-456 --status in_progress
+# ... do refactoring ...
+bd close loaa-456 --reason "Completed refactoring"
+git stash pop  # or start fresh if needed
+# Continue with loaa-123
+```
+
 ### What NOT to Build (Yet)
 
 These are explicitly deferred to later phases:

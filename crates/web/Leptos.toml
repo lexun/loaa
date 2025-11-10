@@ -1,0 +1,24 @@
+[package]
+name = "loaa-web"
+version = "0.1.0"
+edition = "2021"
+
+[build]
+bin-name = "loaa-web"
+site-root = "target/site"
+site-pkg = "target/site-pkg"
+app-root = "app"
+build-dir = "target/server"
+
+[wasm]
+minify = "es2020"
+
+[server]
+port = 3000
+address = "127.0.0.1"
+command = "target/server/loaa-web"
+args = []
+env = []
+
+[style]
+stylesheet = "style/main.css"
