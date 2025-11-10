@@ -1,26 +1,25 @@
 use surrealdb::Surreal;
-use surrealdb::engine::local::RocksDb;
+use surrealdb::engine::local::Db;
 use crate::models::{LedgerEntry, Ledger};
 use crate::error::{Error, Result};
 use uuid::Uuid;
 use std::sync::Arc;
 
 pub struct LedgerRepository {
-    db: Arc<Surreal<RocksDb>>,
+    db: Arc<Surreal<Db>>,
 }
 
 impl LedgerRepository {
-    pub fn new(db: Arc<Surreal<RocksDb>>) -> Self {
+    pub fn new(db: Arc<Surreal<Db>>) -> Self {
         Self { db }
     }
 
     pub async fn create_entry(&self, entry: LedgerEntry) -> Result<LedgerEntry> {
-        let created: Vec<LedgerEntry> = self.db
-            .create(("ledger_entry", entry.id))
+        let created: Option<LedgerEntry> = self.db
+            .create(("ledger_entry", entry.id.to_string()))
             .content(entry)
             .await?;
-        created.into_iter().next()
-            .ok_or_else(|| Error::Database("Failed to create ledger entry".to_string()))
+        created.ok_or_else(|| Error::Database("Failed to create ledger entry".to_string()))
     }
 
     pub async fn get_ledger(&self, kid_id: Uuid) -> Result<Ledger> {

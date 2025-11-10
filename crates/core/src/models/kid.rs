@@ -5,6 +5,7 @@ use crate::error::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Kid {
+    #[serde(skip)]
     pub id: Uuid,
     pub name: String,
     pub created_at: DateTime<Utc>,

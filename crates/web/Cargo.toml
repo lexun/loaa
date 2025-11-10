@@ -4,6 +4,26 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
+[[bin]]
+name = "loaa-web"
+path = "src/main.rs"
+
+[package.metadata.leptos]
+output-name = "loaa-web"
+site-root = "target/site"
+site-pkg-dir = "pkg"
+style-file = "style/main.css"
+assets-dir = "assets"
+site-addr = "127.0.0.1:3000"
+reload-port = 3001
+browserquery = "defaults"
+watch = false
+env = "DEV"
+bin-features = ["ssr"]
+bin-default-features = false
+lib-features = ["hydrate"]
+lib-default-features = false
+
 [dependencies]
 loaa-core = { path = "../core" }
 leptos = { version = "0.6", features = ["csr", "hydrate", "ssr"] }
@@ -16,3 +36,4 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 leptos_config = "0.6"
 rust_decimal = { version = "1.33", features = ["serde-with-str"] }
+rust_decimal_macros = "1.33"

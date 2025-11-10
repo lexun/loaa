@@ -1,10 +1,10 @@
-use surrealdb::{Surreal, engine::local::RocksDb};
+use surrealdb::{Surreal, engine::local::{Db, RocksDb}};
 use crate::error::{Error, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct Database {
-    pub client: Arc<Surreal<RocksDb>>,
+    pub client: Arc<Surreal<Db>>,
 }
 
 impl Database {
@@ -13,7 +13,7 @@ impl Database {
         std::fs::create_dir_all(&db_path)
             .map_err(|e| Error::Database(format!("Failed to create database directory: {}", e)))?;
 
-        let db = Surreal::new::<RocksDb>(db_path)
+        let db: Surreal<Db> = Surreal::new::<RocksDb>(db_path)
             .await
             .map_err(|e| Error::Database(format!("Failed to initialize database: {}", e)))?;
 

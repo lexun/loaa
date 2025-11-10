@@ -1,7 +1,6 @@
 use leptos::*;
-use loaa_core::{Database, KidRepository, TaskRepository, LedgerRepository, init_database};
+use loaa_core::{Database, KidRepository, TaskRepository, LedgerRepository, init_database, Uuid};
 use loaa_core::models::*;
-use uuid::Uuid;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 

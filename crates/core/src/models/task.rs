@@ -6,6 +6,7 @@ use crate::error::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
+    #[serde(skip)]
     pub id: Uuid,
     pub name: String,
     pub description: String,

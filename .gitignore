@@ -1,3 +1,10 @@
+# Devenv
+.devenv*
+devenv.local.nix
+
+# Direnv
+.direnv
+
 # Rust
 target/
 **/*.rs.bk

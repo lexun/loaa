@@ -5,6 +5,7 @@ use rust_decimal::Decimal;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LedgerEntry {
+    #[serde(skip)]
     pub id: Uuid,
     pub kid_id: Uuid,
     pub amount: Decimal,

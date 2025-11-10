@@ -1,5 +1,5 @@
 use leptos::*;
-use loaa_web::server_functions::*;
+use crate::server_functions::*;
 
 #[component]
 pub fn App() -> impl IntoView {
