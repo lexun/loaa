@@ -1,0 +1,8 @@
+[package]
+name = "loaa-mcp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+loaa-core = { path = "../core" }
