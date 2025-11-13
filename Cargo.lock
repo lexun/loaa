@@ -2469,6 +2469,7 @@ dependencies = [
  "rust_decimal_macros",
  "serde",
  "surrealdb",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "uuid",
