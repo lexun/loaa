@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "loaa": {
+      "command": "cargo",
+      "args": ["run", "-p", "loaa-mcp"],
+      "env": {
+        "LOAA_DB_PATH": "./data/loaa.db"
+      }
+    }
+  }
+}
