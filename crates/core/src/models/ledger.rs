@@ -7,11 +7,28 @@ use rust_decimal::Decimal;
 pub struct LedgerEntry {
     #[serde(skip)]
     pub id: Uuid,
+    #[serde(serialize_with = "serialize_uuid_as_string", deserialize_with = "deserialize_uuid_from_string")]
     pub kid_id: Uuid,
     pub amount: Decimal,
     pub entry_type: EntryType,
     pub description: String,
     pub created_at: DateTime<Utc>,
+}
+
+// Custom serialization for UUID to ensure it's stored as a string
+fn serialize_uuid_as_string<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&uuid.to_string())
+}
+
+fn deserialize_uuid_from_string<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Uuid::parse_str(&s).map_err(serde::de::Error::custom)
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
