@@ -12,5 +12,6 @@
   packages = with pkgs; [
     git
     just
+    surrealdb
   ];
 }

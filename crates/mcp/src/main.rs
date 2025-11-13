@@ -517,7 +517,10 @@ async fn main() -> Result<()> {
 
     // Use stdio transport
     use tokio::io::{stdin, stdout};
-    server.serve((stdin(), stdout())).await?;
+    let service = server.serve((stdin(), stdout())).await?;
+
+    // Keep the service running
+    service.waiting().await?;
 
     Ok(())
 }
