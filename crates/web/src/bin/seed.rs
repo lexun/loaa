@@ -5,8 +5,9 @@ use rust_decimal_macros::dec;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🌱 Seeding Loa'a database...\n");
 
-    // Initialize database
-    let db = Database::init(".data/web-db").await?;
+    // Initialize database - connect to SurrealDB server
+    let db_url = std::env::var("LOAA_DB_URL").unwrap_or_else(|_| "127.0.0.1:8000".to_string());
+    let db = Database::init(&db_url).await?;
     let kid_repo = KidRepository::new(db.client.clone());
     let task_repo = TaskRepository::new(db.client.clone());
 

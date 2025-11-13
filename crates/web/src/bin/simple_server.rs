@@ -16,8 +16,9 @@ struct AppState {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Loa'a web server...");
 
-    // Initialize database
-    let db = Database::init(".data/web-db").await?;
+    // Initialize database - connect to SurrealDB server
+    let db_url = std::env::var("LOAA_DB_URL").unwrap_or_else(|_| "127.0.0.1:8000".to_string());
+    let db = Database::init(&db_url).await?;
     let state = AppState {
         db: Arc::new(db),
     };
