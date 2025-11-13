@@ -103,11 +103,30 @@ This teaches real-world economic concepts while getting chores done.
 
 ## Integration with AI Assistant (MCP)
 
-A key feature is MCP server integration, allowing the parent to:
-- Tell their AI assistant "Kid X finished chore Y"
-- Query: "What tasks are pending approval?"
-- Check: "How much do I owe each kid?"
-- Create tasks via natural language
+A key feature is MCP server integration, enabling natural language management of the system.
+
+### Phase 1: Claude Code Integration
+Parent uses Claude Code (or similar MCP client) alongside read-only web dashboard:
+- "Alice finished taking out the trash" → creates ledger entry
+- "What tasks are available?" → lists tasks with values
+- "How much do I owe each kid?" → shows balances
+- "Create a new task: vacuum living room, $3, weekly" → adds task
+
+**Workflow**: Parent has web UI open for visibility, uses AI assistant for all mutations.
+
+### Future: In-App Voice Interface
+Long-term vision is voice-first interface built into the web app:
+- Microphone button in UI
+- Parent taps and speaks: "Bob finished the dishes"
+- Speech-to-text → Claude API → MCP server → update database
+- Confirmation shown in UI
+- All management happens through natural conversation, no clicking
+
+**Benefits:**
+- Hands-free updates while cooking/cleaning
+- Natural language is faster than navigating forms
+- Kids can potentially report completions themselves (future phase)
+- Reduces friction to near-zero
 
 This reduces friction - parent can update the system without context switching.
 

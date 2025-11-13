@@ -15,10 +15,11 @@
 
 **Core Features:**
 - Task definitions (name, description, value, cadence)
-- Manual task completion entry by parent
+- Task completion workflow (creates ledger entries, resets recurring tasks)
 - Ledger per kid showing balance owed
 - Transaction history (earned, adjusted)
-- Simple web UI for parent
+- **Read-only web UI** for visibility (dashboard view)
+- **MCP server** for all mutations via Claude Code/AI assistant
 
 **What's NOT included:**
 - Kids cannot log in (no authentication yet)
@@ -30,36 +31,44 @@
 
 ### Success Criteria
 
-- [ ] Parent can create/edit/delete tasks
-- [ ] Parent can record "Kid X completed task Y"
-- [ ] Each kid's ledger shows correct balance
-- [ ] Transaction history is accurate and visible
-- [ ] Parent can make manual adjustments (corrections)
-- [ ] Runs locally without external dependencies
+- [x] Core data models implemented (Task, Kid, LedgerEntry)
+- [x] Task CRUD operations working
+- [x] Task completion workflow implemented
+- [ ] MCP server with tools for task management
+- [ ] Read-only web UI showing tasks, kids, balances
+- [ ] Parent can use Claude Code to manage everything via natural language
 - [ ] Data persists between restarts
+- [ ] System runs locally without external dependencies
 
 ### Technical Milestones
 
-1. **Foundation**
-   - Leptos web app with SSR working
+1. **Foundation** ✅
    - SurrealDB embedded mode connected
    - Core data models defined (Task, Kid, LedgerEntry)
+   - Repository layer with proper ID serialization
 
-2. **Task Management**
-   - CRUD operations for tasks
-   - Task list view
-   - Task form with validation
+2. **Business Logic** ✅
+   - Task CRUD operations
+   - Kid CRUD operations
+   - Ledger entry creation
+   - Task completion workflow (with reset logic)
 
-3. **Ledger & Transactions**
-   - Record task completions
-   - Calculate balances
-   - Transaction history view
-   - Manual adjustments
+3. **MCP Server** 🔄
+   - Implement using `rmcp` (official Rust SDK)
+   - Expose tools: create/list/update tasks, create kids, complete tasks, get balances
+   - Test with Claude Code integration
 
-4. **Polish**
+4. **Read-Only Web UI** 🔄
+   - Leptos web app with SSR
+   - Dashboard showing all tasks
+   - Kid balance cards
+   - Recent transaction history
+   - Auto-refresh when data changes
+
+5. **Polish**
    - Basic UI styling
-   - Form validation
    - Error handling
+   - Data persistence validation
 
 ### Why This Scope?
 
@@ -205,10 +214,65 @@ We'll need to experiment and tune based on real usage.
 - [ ] Parent gets notification of redemptions
 - [ ] Track cash owed separately
 
+## Phase 6: Voice-First UI with Claude API Integration (1-2 weeks)
+
+**Goal**: In-app voice interface for hands-free management
+
+### Scope
+
+**New Features:**
+- Microphone button in web UI
+- Speech-to-text capture
+- Direct Claude API integration from backend
+- MCP client implementation (handle tool calling protocol)
+- Voice confirmation and feedback
+- Error handling for speech recognition
+
+### Technical Architecture
+
+```
+User speaks → Web UI (mic button)
+                  ↓
+            Speech-to-Text
+                  ↓
+          Backend Server (Rust)
+                  ↓
+    Claude API (with tool definitions)
+                  ↓
+    MCP Client Protocol Handler
+                  ↓
+         Local MCP Server
+                  ↓
+         Execute actions
+                  ↓
+    Update UI with confirmation
+```
+
+### Success Criteria
+
+- [ ] Microphone button captures audio
+- [ ] Speech-to-text conversion works reliably
+- [ ] Claude API integration with tool calling
+- [ ] MCP client protocol implemented in Rust
+- [ ] Voice commands execute correct actions
+- [ ] UI shows confirmation of what was done
+- [ ] Error states handled gracefully
+
+### Why Later?
+
+This is deferred because:
+- Phase 1 MCP server works with Claude Code today (zero extra work)
+- Voice UI requires implementing MCP client protocol ourselves
+- Want to validate the core concept first
+- Can use Claude Code as interim solution
+
+Once we validate the workflow with Claude Code, this provides a better UX by eliminating the need for a separate app.
+
 ## Future Possibilities (Backlog)
 
 **Ideas we might explore:**
 
+- **Google Home integration** - Voice commands via smart speaker
 - **Recurring tasks** - Auto-create daily/weekly tasks
 - **Chore templates** - Library of common tasks
 - **Reports** - Weekly earnings summary
@@ -224,13 +288,14 @@ We'll need to experiment and tune based on real usage.
 
 | Phase | Duration | Cumulative |
 |-------|----------|------------|
-| Phase 1: MVP | 2-3 weeks | 3 weeks |
+| Phase 1: MVP (MCP + Read-Only UI) | 2-3 weeks | 3 weeks |
 | Phase 2: Multi-user | 1-2 weeks | 5 weeks |
 | Phase 3: Prerequisites | 1 week | 6 weeks |
 | Phase 4: Bounties | 1 week | 7 weeks |
 | Phase 5: Rewards | 1-2 weeks | 9 weeks |
+| Phase 6: Voice UI | 1-2 weeks | 11 weeks |
 
-**Realistic timeline: ~2 months to full feature set**
+**Realistic timeline: ~2.5 months to full feature set with voice UI**
 
 But Phase 1 gets us something usable in 2-3 weeks.
 
