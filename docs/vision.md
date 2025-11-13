@@ -43,6 +43,8 @@ An earlier project (`gp`) implemented a basic points system with:
 
 ## Key Features
 
+> **Note**: The features below describe the eventual vision for Loa'a. Implementation happens in phases (see `roadmap.md`). Phase 1 starts with a simpler parent-only interface, with multi-user features and approval workflows coming in later phases.
+
 ### MVP Features (Phase 1)
 
 **Task Management**
