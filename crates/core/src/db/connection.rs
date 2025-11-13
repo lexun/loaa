@@ -1,21 +1,25 @@
-use surrealdb::{Surreal, engine::local::{Db, RocksDb}};
+use surrealdb::opt::auth::Root;
+use surrealdb::{Surreal, engine::remote::ws::{Client, Ws}};
 use crate::error::{Error, Result};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct Database {
-    pub client: Arc<Surreal<Db>>,
+    pub client: Arc<Surreal<Client>>,
 }
 
 impl Database {
-    pub async fn init(path: &str) -> Result<Self> {
-        let db_path = PathBuf::from(path);
-        std::fs::create_dir_all(&db_path)
-            .map_err(|e| Error::Database(format!("Failed to create database directory: {}", e)))?;
-
-        let db: Surreal<Db> = Surreal::new::<RocksDb>(db_path)
+    pub async fn init(url: &str) -> Result<Self> {
+        let db = Surreal::new::<Ws>(url)
             .await
-            .map_err(|e| Error::Database(format!("Failed to initialize database: {}", e)))?;
+            .map_err(|e| Error::Database(format!("Failed to connect to database: {}", e)))?;
+
+        // Sign in as root user
+        db.signin(Root {
+            username: "root",
+            password: "root",
+        })
+        .await
+        .map_err(|e| Error::Database(format!("Failed to authenticate: {}", e)))?;
 
         db.use_ns("loaa").use_db("main").await
             .map_err(|e| Error::Database(format!("Failed to set namespace/database: {}", e)))?;
@@ -24,7 +28,7 @@ impl Database {
     }
 }
 
-pub async fn init_database(path: &str) -> Result<Database> {
-    Database::init(path).await
+pub async fn init_database(url: &str) -> Result<Database> {
+    Database::init(url).await
 }
 

@@ -11,7 +11,6 @@ use rust_decimal::Decimal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -96,8 +95,8 @@ struct AdjustBalanceParams {
 
 #[tool_router]
 impl LoaaServer {
-    async fn new(db_path: &str) -> Result<Self> {
-        let database = init_database(db_path).await?;
+    async fn new(db_url: &str) -> Result<Self> {
+        let database = init_database(db_url).await?;
         let task_repo = TaskRepository::new(database.client.clone());
         let kid_repo = KidRepository::new(database.client.clone());
         let ledger_repo = LedgerRepository::new(database.client.clone());
@@ -491,17 +490,13 @@ impl rmcp::handler::server::ServerHandler for LoaaServer {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Get database path from environment or use default
-    let db_path = std::env::var("LOAA_DB_PATH").unwrap_or_else(|_| {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("../../data/loaa.db");
-        path.to_string_lossy().to_string()
-    });
+    // Get database URL from environment or use default
+    let db_url = std::env::var("LOAA_DB_URL").unwrap_or_else(|_| "127.0.0.1:8000".to_string());
 
     eprintln!("Initializing Loa'a MCP Server...");
-    eprintln!("Database path: {}", db_path);
+    eprintln!("Database URL: {}", db_url);
 
-    let server = LoaaServer::new(&db_path).await?;
+    let server = LoaaServer::new(&db_url).await?;
 
     eprintln!("Loa'a MCP Server started successfully!");
     eprintln!("Available tools:");
