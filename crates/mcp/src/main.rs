@@ -5,7 +5,8 @@ use loaa_core::workflows::TaskCompletionWorkflow;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::*;
-use rmcp::{tool, tool_router, ErrorData as McpError, ServiceExt};
+use rmcp::service::RequestContext;
+use rmcp::{tool, tool_router, ErrorData as McpError, RoleServer, ServiceExt};
 use rust_decimal::Decimal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -456,6 +457,34 @@ impl rmcp::handler::server::ServerHandler for LoaaServer {
                 website_url: None,
             },
             instructions: Some("Loa'a chore tracking system".to_string()),
+        }
+    }
+
+    fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParam>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ListToolsResult, McpError>> + Send + '_ {
+        async move {
+            let tools = self.tool_router.list_all();
+            Ok(ListToolsResult {
+                tools,
+                next_cursor: None,
+            })
+        }
+    }
+
+    fn call_tool(
+        &self,
+        request: CallToolRequestParam,
+        context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<CallToolResult, McpError>> + Send + '_ {
+        async move {
+            use rmcp::handler::server::tool::ToolCallContext;
+
+            let tool_context = ToolCallContext::new(self, request, context);
+
+            self.tool_router.call(tool_context).await
         }
     }
 }
