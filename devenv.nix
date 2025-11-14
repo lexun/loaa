@@ -53,10 +53,6 @@
     };
   };
 
-  # Enable process-compose
-  process.managers.process-compose = {
-    enable = true;
-    # Disable TUI for headless operation (can be overridden with -t flag)
-    tui.enable = false;
-  };
+  # Enable process-compose with TUI
+  process.managers.process-compose.enable = true;
 }

@@ -8,7 +8,7 @@ start mode='':
     #!/usr/bin/env bash
     if [ "{{mode}}" = "-d" ]; then
         echo "Starting services in background..."
-        nohup devenv up > .devenv/state/services.log 2>&1 &
+        PC_DISABLE_TUI=true nohup devenv up > .devenv/state/services.log 2>&1 &
         echo $! > .devenv/state/services.pid
         echo "Services started. PID: $(cat .devenv/state/services.pid)"
         echo "View logs with: just logs"
