@@ -39,28 +39,28 @@ restart mode='':
     @just stop
     @just start {{mode}}
 
-# View service logs (combined)
+# View service logs (all by default, or specify service: db, web)
 [group('services')]
-logs:
+logs service='':
     #!/usr/bin/env bash
-    if [ -f .devenv/state/services.log ]; then
-        tail -f .devenv/state/services.log
-    elif [ -f .devenv/state/process-compose/process-compose.log ]; then
-        tail -f .devenv/state/process-compose/process-compose.log
+    if [ -z "{{service}}" ]; then
+        # Show combined logs
+        if [ -f .devenv/state/services.log ]; then
+            tail -f .devenv/state/services.log
+        elif [ -f .devenv/state/process-compose/process-compose.log ]; then
+            tail -f .devenv/state/process-compose/process-compose.log
+        else
+            echo "No log files found. Run 'just start' first."
+        fi
     else
-        echo "No log files found. Run 'just start' first."
-    fi
-
-# View logs for a specific service (db or web)
-[group('services')]
-log service:
-    #!/usr/bin/env bash
-    LOG_FILE=".devenv/state/process-compose/{{service}}.log"
-    if [ -f "$LOG_FILE" ]; then
-        tail -f "$LOG_FILE"
-    else
-        echo "Log file not found: $LOG_FILE"
-        echo "Available: $(ls .devenv/state/process-compose/*.log 2>/dev/null || echo 'none')"
+        # Show specific service logs
+        LOG_FILE=".devenv/state/process-compose/{{service}}.log"
+        if [ -f "$LOG_FILE" ]; then
+            tail -f "$LOG_FILE"
+        else
+            echo "Log file not found: $LOG_FILE"
+            echo "Available services: $(ls .devenv/state/process-compose/*.log 2>/dev/null | xargs -n1 basename | sed 's/.log$//' | tr '\n' ' ' || echo 'none')"
+        fi
     fi
 
 # Run all tests

@@ -71,8 +71,8 @@ just restart -d
 just logs
 
 # View logs for a specific service
-just log db    # Database logs only
-just log web   # Web server logs only
+just logs db    # Database logs only
+just logs web   # Web server logs only
 ```
 
 Logs are automatically captured when running in background mode.
