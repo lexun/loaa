@@ -2,7 +2,7 @@
 default:
     @just --list --unsorted
 
-# Start all services (foreground by default, -d for background)
+# Start all services (foreground with TUI, -d for background daemon)
 [group('services')]
 start mode='':
     #!/usr/bin/env bash
@@ -12,21 +12,9 @@ start mode='':
         echo $! > .devenv/state/services.pid
         echo "Services started. PID: $(cat .devenv/state/services.pid)"
         echo "View logs with: just logs"
-        echo "Attach with: just attach"
+        echo "Attach TUI with: just start"
     else
         devenv up
-    fi
-
-# Attach to running background services (shows logs)
-[group('services')]
-attach:
-    #!/usr/bin/env bash
-    if [ -f .devenv/state/services.pid ]; then
-        echo "Attaching to services (Ctrl+C to detach)..."
-        tail -f .devenv/state/services.log
-    else
-        echo "No background services running. Start with: just start -d"
-        exit 1
     fi
 
 # Stop all services

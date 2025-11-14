@@ -33,23 +33,18 @@ Features:
 ### Background vs Foreground
 
 **Foreground mode (`just start`):**
-- Logs displayed directly in terminal
+- Interactive TUI (Terminal User Interface)
+- Navigate logs, view process status
 - Ctrl+C stops all services
 - Best for active development
+- If services already running in background, attaches to them with TUI
 
 **Background mode (`just start -d`):**
-- Services run as daemon
+- Services run as daemon (no TUI)
 - Terminal freed for other work
-- Use `just attach` to view logs
+- Run `just start` again to attach with TUI
+- Use `just logs` to tail log file
 - Use `just stop` to stop services
-
-### Attach to background services
-
-```bash
-just attach
-```
-
-Shows live logs from background services. Press Ctrl+C to detach (services keep running).
 
 ### Stop all services
 
