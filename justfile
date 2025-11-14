@@ -2,22 +2,34 @@
 default:
     @just --list --unsorted
 
-# Start all services (database + web server)
+# Start all services (foreground by default, -d for background)
 [group('services')]
-up:
-    devenv up
-
-# Start all services in background (headless)
-[group('services')]
-start:
+start mode='':
     #!/usr/bin/env bash
-    echo "Starting services in background..."
-    nohup devenv up > .devenv/state/services.log 2>&1 &
-    echo $! > .devenv/state/services.pid
-    echo "Services started. PID: $(cat .devenv/state/services.pid)"
-    echo "View logs with: just logs"
+    if [ "{{mode}}" = "-d" ]; then
+        echo "Starting services in background..."
+        nohup devenv up > .devenv/state/services.log 2>&1 &
+        echo $! > .devenv/state/services.pid
+        echo "Services started. PID: $(cat .devenv/state/services.pid)"
+        echo "View logs with: just logs"
+        echo "Attach with: just attach"
+    else
+        devenv up
+    fi
 
-# Stop all background services
+# Attach to running background services (shows logs)
+[group('services')]
+attach:
+    #!/usr/bin/env bash
+    if [ -f .devenv/state/services.pid ]; then
+        echo "Attaching to services (Ctrl+C to detach)..."
+        tail -f .devenv/state/services.log
+    else
+        echo "No background services running. Start with: just start -d"
+        exit 1
+    fi
+
+# Stop all services
 [group('services')]
 stop:
     #!/usr/bin/env bash
@@ -33,9 +45,11 @@ stop:
         pkill -f simple_server || echo "No web server processes found"
     fi
 
-# Restart all services
+# Restart all services (foreground by default, -d for background)
 [group('services')]
-restart: stop start
+restart mode='':
+    @just stop
+    @just start {{mode}}
 
 # View service logs (combined)
 [group('services')]

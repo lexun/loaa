@@ -12,11 +12,11 @@
 ### Start all services
 
 ```bash
-# Option 1: Interactive mode (with logs in foreground)
-just up
-
-# Option 2: Background mode (daemonized)
+# Foreground mode (default) - logs shown in terminal
 just start
+
+# Background mode - services run as daemon
+just start -d
 ```
 
 This uses process-compose to start and manage all services:
@@ -30,21 +30,44 @@ Features:
 - ✅ **Auto-restart** - services restart on failure (up to 5 attempts)
 - ✅ **Clean shutdown** - easy stop/restart commands
 
+### Background vs Foreground
+
+**Foreground mode (`just start`):**
+- Logs displayed directly in terminal
+- Ctrl+C stops all services
+- Best for active development
+
+**Background mode (`just start -d`):**
+- Services run as daemon
+- Terminal freed for other work
+- Use `just attach` to view logs
+- Use `just stop` to stop services
+
+### Attach to background services
+
+```bash
+just attach
+```
+
+Shows live logs from background services. Press Ctrl+C to detach (services keep running).
+
 ### Stop all services
 
 ```bash
 just stop
 ```
 
-This kills all background services cleanly. Works whether you started with `just start` or manually.
+Stops all services cleanly, whether running in foreground or background.
 
 ### Restart all services
 
 ```bash
+# Restart in foreground
 just restart
-```
 
-Stops and starts all services in one command.
+# Restart in background
+just restart -d
+```
 
 ### View service logs
 
@@ -57,7 +80,7 @@ just log db    # Database logs only
 just log web   # Web server logs only
 ```
 
-Logs are automatically captured to `.devenv/state/services.log` and can be tailed in real-time.
+Logs are automatically captured when running in background mode.
 
 ## Alternative: Manual Service Management
 
