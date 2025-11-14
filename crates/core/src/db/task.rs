@@ -41,7 +41,7 @@ impl TaskRepository {
         let task_id = task.id.to_string();
         let created: Option<TaskRecord> = self.db
             .create(("task", &task_id))
-            .content(&task)
+            .content(task)
             .await?;
 
         created
@@ -76,7 +76,7 @@ impl TaskRepository {
         // If it exists, update it
         let updated: Option<TaskRecord> = self.db
             .update(("task", task_id.to_string()))
-            .content(&task)
+            .content(task)
             .await?;
 
         updated

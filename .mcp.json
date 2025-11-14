@@ -2,7 +2,7 @@
   "mcpServers": {
     "loaa": {
       "command": "cargo",
-      "args": ["run", "--quiet", "-p", "loaa-mcp"],
+      "args": ["run", "-p", "loaa-mcp"],
       "env": {
         "LOAA_DB_URL": "127.0.0.1:8000"
       }

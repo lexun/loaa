@@ -3,7 +3,9 @@
 ## Prerequisites
 
 - Nix with devenv (for automatic dependency management)
-- Or manually: Rust, SurrealDB, just
+- Or manually: Rust, SurrealDB 2.3+, just
+
+**Note**: The Rust client SDK (v2.3) requires SurrealDB server v2.3 or higher.
 
 ## Quick Start
 

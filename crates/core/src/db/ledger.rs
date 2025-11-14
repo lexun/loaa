@@ -41,7 +41,7 @@ impl LedgerRepository {
         let entry_id = entry.id.to_string();
         let created: Option<LedgerEntryRecord> = self.db
             .create(("ledger_entry", &entry_id))
-            .content(&entry)
+            .content(entry)
             .await?;
 
         created

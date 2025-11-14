@@ -41,7 +41,7 @@ impl KidRepository {
         let kid_id = kid.id.to_string();
         let created: Option<KidRecord> = self.db
             .create(("kid", &kid_id))
-            .content(&kid)
+            .content(kid)
             .await?;
 
         created
@@ -76,7 +76,7 @@ impl KidRepository {
         // If it exists, update it
         let updated: Option<KidRecord> = self.db
             .update(("kid", kid_id.to_string()))
-            .content(&kid)
+            .content(kid)
             .await?;
 
         updated

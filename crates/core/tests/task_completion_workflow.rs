@@ -4,10 +4,13 @@ use loaa_core::workflows::TaskCompletionWorkflow;
 use rust_decimal_macros::dec;
 use tempfile::TempDir;
 
+// NOTE: Tests require a running SurrealDB server on 127.0.0.1:8000
+// Run `just db` before running tests
+
 async fn setup_test() -> (TempDir, TaskCompletionWorkflow, TaskRepository, KidRepository, LedgerRepository) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let db_path = temp_dir.path().join("test.db");
-    let database = init_database(db_path.to_str().unwrap())
+    let db_url = std::env::var("LOAA_DB_URL").unwrap_or_else(|_| "127.0.0.1:8000".to_string());
+    let database = init_database(&db_url)
         .await
         .expect("Failed to initialize database");
 
@@ -26,7 +29,7 @@ async fn setup_test() -> (TempDir, TaskCompletionWorkflow, TaskRepository, KidRe
 
 #[tokio::test]
 async fn test_complete_one_time_task() {
-    let (_temp_dir, workflow, task_repo, kid_repo, _ledger_repo) = setup_test().await;
+    let (_temp_dir, workflow, task_repo, kid_repo, ledger_repo) = setup_test().await;
 
     // Create a kid
     let kid = Kid::new("Alice".to_string()).unwrap();
@@ -63,7 +66,7 @@ async fn test_complete_one_time_task() {
 
 #[tokio::test]
 async fn test_complete_daily_task() {
-    let (_temp_dir, workflow, task_repo, kid_repo, ledger_repo) = setup_test().await;
+    let (_temp_dir, workflow, task_repo, kid_repo, _ledger_repo) = setup_test().await;
 
     // Create a kid
     let kid = Kid::new("Bob".to_string()).unwrap();

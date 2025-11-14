@@ -14,6 +14,7 @@ Cargo.lock
 .data/
 *.db
 *.surreal
+history.txt
 
 # IDE
 .idea/
