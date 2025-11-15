@@ -37,22 +37,26 @@ header p {
 }
 
 main {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-}
-
-section {
     background: white;
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+section {
+    margin-bottom: 30px;
+}
+
 section h2 {
     color: #2c3e50;
     margin-bottom: 15px;
     font-size: 1.5em;
+}
+
+section h3 {
+    color: #34495e;
+    margin-bottom: 10px;
+    font-size: 1.2em;
 }
 
 ul {
@@ -70,4 +74,276 @@ li {
 .error {
     color: #e74c3c;
     font-weight: bold;
+    padding: 15px;
+    background: #ffe5e5;
+    border-radius: 4px;
+}
+
+/* Dashboard Overview */
+.overview .stats {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.stat {
+    padding: 15px 20px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #3498db;
+}
+
+.stat-label {
+    display: block;
+    color: #7f8c8d;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    display: block;
+    color: #2c3e50;
+    font-size: 1.8em;
+    font-weight: bold;
+}
+
+/* Kids Grid */
+.kids-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.kid-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e1e8ed;
+    transition: box-shadow 0.2s;
+}
+
+.kid-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.kid-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e1e8ed;
+}
+
+.kid-header h3 {
+    color: #2c3e50;
+    margin: 0;
+    font-size: 1.3em;
+}
+
+.balance {
+    color: #27ae60;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.recent-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.entry-type {
+    font-size: 0.85em;
+    color: #7f8c8d;
+    text-transform: uppercase;
+}
+
+.entry-description {
+    color: #2c3e50;
+}
+
+.entry-amount {
+    color: #27ae60;
+    font-weight: bold;
+}
+
+.view-ledger-btn {
+    width: 100%;
+    padding: 10px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background 0.2s;
+}
+
+.view-ledger-btn:hover {
+    background: #2980b9;
+}
+
+/* Recent Activity */
+.activity-list {
+    list-style: none;
+    padding: 0;
+}
+
+.activity-item {
+    display: grid;
+    grid-template-columns: 80px 80px 1fr auto;
+    gap: 15px;
+    padding: 12px;
+    margin: 5px 0;
+    background: #f8f9fa;
+    border-radius: 4px;
+    align-items: center;
+}
+
+.activity-time {
+    color: #7f8c8d;
+    font-size: 0.9em;
+}
+
+.activity-type {
+    font-size: 0.85em;
+    padding: 3px 8px;
+    background: #e1e8ed;
+    border-radius: 3px;
+    text-align: center;
+}
+
+.activity-description {
+    color: #2c3e50;
+}
+
+.activity-amount {
+    color: #27ae60;
+    font-weight: bold;
+}
+
+/* Ledger View */
+.ledger-view {
+    width: 100%;
+}
+
+.ledger-header {
+    margin-bottom: 30px;
+}
+
+.back-btn {
+    padding: 8px 16px;
+    background: #95a5a6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-bottom: 15px;
+    transition: background 0.2s;
+}
+
+.back-btn:hover {
+    background: #7f8c8d;
+}
+
+.balance-display {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #27ae60;
+}
+
+.balance-label {
+    color: #7f8c8d;
+    font-size: 1em;
+}
+
+.balance-value {
+    color: #27ae60;
+    font-size: 2em;
+    font-weight: bold;
+}
+
+/* Ledger Table */
+.ledger-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.ledger-table thead {
+    background: #2c3e50;
+    color: white;
+}
+
+.ledger-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.ledger-table tbody tr {
+    border-bottom: 1px solid #e1e8ed;
+}
+
+.ledger-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.ledger-table td {
+    padding: 12px;
+}
+
+.date-cell .date {
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.date-cell .time {
+    color: #7f8c8d;
+    font-size: 0.85em;
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.badge-earned {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-adjusted {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.amount-cell {
+    font-weight: bold;
+}
+
+.amount-cell.positive {
+    color: #27ae60;
+}
+
+.amount-cell.negative {
+    color: #e74c3c;
+}
+
+.balance-cell {
+    color: #2c3e50;
+    font-weight: 600;
 }

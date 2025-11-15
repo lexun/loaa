@@ -2525,12 +2525,14 @@ name = "loaa-web"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "leptos",
  "leptos_axum",
  "leptos_config",
  "loaa-core",
  "rust_decimal",
  "rust_decimal_macros",
+ "serde",
  "tokio",
  "tower 0.4.13",
  "tower-http 0.5.2",

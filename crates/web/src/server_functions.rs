@@ -3,6 +3,8 @@ use loaa_core::{Database, KidRepository, TaskRepository, LedgerRepository, init_
 use loaa_core::models::*;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
+use serde::{Deserialize, Serialize};
+use rust_decimal::Decimal;
 
 static DB_PATH: &str = ".data/db";
 
@@ -85,4 +87,75 @@ pub async fn get_ledger(kid_id: Uuid) -> Result<Ledger, ServerFnError> {
     let ledger_repo = LedgerRepository::new(db.client.clone());
     ledger_repo.get_ledger(kid_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to get ledger: {}", e)))
+}
+
+// Dashboard data structures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KidSummary {
+    pub kid: Kid,
+    pub balance: Decimal,
+    pub recent_entry: Option<LedgerEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardData {
+    pub kid_summaries: Vec<KidSummary>,
+    pub total_kids: usize,
+    pub active_tasks: usize,
+}
+
+#[server]
+pub async fn get_dashboard_data() -> Result<DashboardData, ServerFnError> {
+    let db = get_db().await?;
+    let kid_repo = KidRepository::new(db.client.clone());
+    let task_repo = TaskRepository::new(db.client.clone());
+    let ledger_repo = LedgerRepository::new(db.client.clone());
+
+    let kids = kid_repo.list().await
+        .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
+
+    let tasks = task_repo.list().await
+        .map_err(|e| ServerFnError::new(format!("Failed to list tasks: {}", e)))?;
+
+    let mut kid_summaries = Vec::new();
+    for kid in kids.iter() {
+        let ledger = ledger_repo.get_ledger(kid.id).await
+            .map_err(|e| ServerFnError::new(format!("Failed to get ledger: {}", e)))?;
+
+        let recent_entry = ledger.entries.last().cloned();
+
+        kid_summaries.push(KidSummary {
+            kid: kid.clone(),
+            balance: ledger.balance,
+            recent_entry,
+        });
+    }
+
+    Ok(DashboardData {
+        kid_summaries,
+        total_kids: kids.len(),
+        active_tasks: tasks.len(),
+    })
+}
+
+#[server]
+pub async fn get_recent_activity(limit: usize) -> Result<Vec<LedgerEntry>, ServerFnError> {
+    let db = get_db().await?;
+    let kid_repo = KidRepository::new(db.client.clone());
+    let ledger_repo = LedgerRepository::new(db.client.clone());
+
+    let kids = kid_repo.list().await
+        .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
+
+    let mut all_entries = Vec::new();
+    for kid in kids {
+        let entries = ledger_repo.list_entries(kid.id).await
+            .map_err(|e| ServerFnError::new(format!("Failed to get ledger entries: {}", e)))?;
+        all_entries.extend(entries);
+    }
+
+    all_entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    all_entries.truncate(limit);
+
+    Ok(all_entries)
 }
