@@ -6,6 +6,8 @@ use loaa_core::{Database, KidRepository, TaskRepository, LedgerRepository, init_
 #[cfg(feature = "ssr")]
 use loaa_core::models::*;
 #[cfg(feature = "ssr")]
+use loaa_core::workflows::TaskCompletionWorkflow;
+#[cfg(feature = "ssr")]
 use std::sync::Arc;
 #[cfg(feature = "ssr")]
 use tokio::sync::OnceCell;
@@ -82,18 +84,15 @@ pub async fn complete_task(kid_id: UuidDto, task_id: UuidDto) -> Result<(), Serv
     let task_uuid = Uuid::from_str(&task_id)
         .map_err(|e| ServerFnError::new(format!("Invalid task ID: {}", e)))?;
 
+    // Use the TaskCompletionWorkflow to handle task completion
+    // This ensures recurring tasks are properly reset
     let task_repo = TaskRepository::new(db.client.clone());
-    let task = task_repo.get(task_uuid).await
-        .map_err(|e| ServerFnError::new(format!("Task not found: {}", e)))?;
-
+    let kid_repo = KidRepository::new(db.client.clone());
     let ledger_repo = LedgerRepository::new(db.client.clone());
-    let entry = LedgerEntry::earned(
-        kid_uuid,
-        task.value,
-        format!("Completed: {}", task.name),
-    );
-    ledger_repo.create_entry(entry).await
-        .map_err(|e| ServerFnError::new(format!("Failed to create ledger entry: {}", e)))?;
+
+    let workflow = TaskCompletionWorkflow::new(task_repo, kid_repo, ledger_repo);
+    workflow.complete_task(task_uuid, kid_uuid).await
+        .map_err(|e| ServerFnError::new(format!("Failed to complete task: {}", e)))?;
 
     Ok(())
 }
