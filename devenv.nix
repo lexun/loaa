@@ -42,7 +42,7 @@
 
     # Web server (depends on database being healthy)
     web = {
-      exec = "cd crates/web && CC_wasm32_unknown_unknown=/usr/bin/clang cargo leptos watch";
+      exec = "cd crates/web && cargo leptos watch";
       process-compose = {
         depends_on.db.condition = "process_healthy";
         availability = {
