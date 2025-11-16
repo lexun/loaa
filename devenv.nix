@@ -13,15 +13,16 @@
     git
     just
     surrealdb
+    lld
   ];
 
   # Process orchestration with process-compose
   # Run `devenv up` to start all services
   # Press Ctrl+C to stop all services
   processes = {
-    # SurrealDB database server
+    # SurrealDB database server (memory mode for development, easily swappable for production)
     db = {
-      exec = "surreal start --log info --user root --pass root file://data/loaa.db";
+      exec = "surreal start --log info --user root --pass root --bind 127.0.0.1:8000 memory";
       process-compose = {
         availability = {
           restart = "on_failure";
@@ -41,7 +42,7 @@
 
     # Web server (depends on database being healthy)
     web = {
-      exec = "cargo run --bin simple_server";
+      exec = "cd crates/web && CC_wasm32_unknown_unknown=/usr/bin/clang cargo leptos watch";
       process-compose = {
         depends_on.db.condition = "process_healthy";
         availability = {

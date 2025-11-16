@@ -1,11 +1,11 @@
 use leptos::*;
 use crate::server_functions::*;
-use loaa_core::Uuid;
+use crate::dto::*;
 
 #[derive(Debug, Clone)]
 pub enum View {
     Dashboard,
-    Ledger(Uuid),
+    Ledger(UuidDto),
 }
 
 #[component]
@@ -74,8 +74,8 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
 }
 
 #[component]
-fn KidSummaryCard(summary: KidSummary, set_view: WriteSignal<View>) -> impl IntoView {
-    let kid_id = summary.kid.id;
+fn KidSummaryCard(summary: KidSummaryDto, set_view: WriteSignal<View>) -> impl IntoView {
+    let kid_id = summary.kid.id.clone();
     view! {
         <div class="kid-card">
             <div class="kid-header">
@@ -84,8 +84,8 @@ fn KidSummaryCard(summary: KidSummary, set_view: WriteSignal<View>) -> impl Into
             </div>
             {summary.recent_entry.map(|entry| {
                 let entry_type = match entry.entry_type {
-                    loaa_core::models::EntryType::Earned => "Earned",
-                    loaa_core::models::EntryType::Adjusted => "Adjusted",
+                    EntryTypeDto::Earned => "Earned",
+                    EntryTypeDto::Adjusted => "Adjusted",
                 };
                 let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                 view! {
@@ -98,7 +98,7 @@ fn KidSummaryCard(summary: KidSummary, set_view: WriteSignal<View>) -> impl Into
             })}
             <button
                 class="view-ledger-btn"
-                on:click=move |_| set_view.set(View::Ledger(kid_id))
+                on:click=move |_| set_view.set(View::Ledger(kid_id.clone()))
             >
                 "View Ledger"
             </button>
@@ -124,8 +124,8 @@ fn RecentActivity() -> impl IntoView {
                                     <ul class="activity-list">
                                         {entries.into_iter().map(|entry| {
                                             let entry_type = match entry.entry_type {
-                                                loaa_core::models::EntryType::Earned => "Earned",
-                                                loaa_core::models::EntryType::Adjusted => "Adjusted",
+                                                EntryTypeDto::Earned => "Earned",
+                                                EntryTypeDto::Adjusted => "Adjusted",
                                             };
                                             let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                                             let time_ago = format_time_ago(entry.created_at);
@@ -168,8 +168,8 @@ fn format_time_ago(dt: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 #[component]
-pub fn LedgerView(kid_id: Uuid, set_view: WriteSignal<View>) -> impl IntoView {
-    let ledger = create_resource(move || kid_id, |kid_id| get_ledger(kid_id));
+pub fn LedgerView(kid_id: UuidDto, set_view: WriteSignal<View>) -> impl IntoView {
+    let ledger = create_resource(move || kid_id.clone(), |kid_id| get_ledger(kid_id));
 
     view! {
         <div class="ledger-view">
@@ -214,8 +214,8 @@ pub fn LedgerView(kid_id: Uuid, set_view: WriteSignal<View>) -> impl IntoView {
                                                         {ledger_data.entries.into_iter().map(|entry| {
                                                             running_balance += entry.amount;
                                                             let entry_type = match entry.entry_type {
-                                                                loaa_core::models::EntryType::Earned => "Earned",
-                                                                loaa_core::models::EntryType::Adjusted => "Adjusted",
+                                                                EntryTypeDto::Earned => "Earned",
+                                                                EntryTypeDto::Adjusted => "Adjusted",
                                                             };
                                                             let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                                                             let date_str = entry.created_at.format("%Y-%m-%d").to_string();

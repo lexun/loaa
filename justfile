@@ -75,12 +75,12 @@ reset:
     echo "Cleaning database..."
     rm -rf data/loaa.db
     echo "Seeding database..."
-    cargo run --bin seed
+    cargo run --bin seed --features ssr
 
 # Seed the database with initial data
 [group('database')]
 seed:
-    cargo run --bin seed
+    cargo run --bin seed --features ssr
 
 # Clean the database (WARNING: deletes all data!)
 [group('database')]

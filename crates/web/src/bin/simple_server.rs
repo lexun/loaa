@@ -1,10 +1,10 @@
 use axum::{
-    extract::State,
+    extract::{Path, State},
     response::Html,
     routing::get,
     Router,
 };
-use loaa_core::{Database, KidRepository, TaskRepository};
+use loaa_core::{Database, KidRepository, TaskRepository, LedgerRepository, Uuid};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -25,9 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build router
     let app = Router::new()
-        .route("/", get(index))
-        .route("/kids", get(list_kids))
-        .route("/tasks", get(list_tasks))
+        .route("/", get(dashboard))
+        .route("/ledger/:kid_id", get(ledger_view))
         .with_state(state);
 
     // Start server
