@@ -277,10 +277,6 @@ li {
     transform: translateX(-4px);
 }
 
-.back-btn:hover {
-    background: #7f8c8d;
-}
-
 .balance-display {
     display: flex;
     gap: 10px;
