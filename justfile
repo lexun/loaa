@@ -20,14 +20,14 @@ attach:
 # Stop all services gracefully
 [group('services')]
 stop:
-    devenv processes down
+    process-compose down --ordered-shutdown
 
 # Restart all services (stops and starts in background)
 [group('services')]
 restart:
     #!/usr/bin/env bash
     echo "Restarting services..."
-    devenv processes down 2>/dev/null || true
+    process-compose down --ordered-shutdown 2>/dev/null || true
     sleep 1
     devenv processes up --detach
     echo "Services restarted in background. Run 'just attach' to view TUI."
