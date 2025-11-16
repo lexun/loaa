@@ -1,5 +1,5 @@
 use surrealdb::Surreal;
-use surrealdb::engine::remote::ws::Client;
+use surrealdb::engine::any::Any;
 use surrealdb::sql::Thing;
 use crate::models::{LedgerEntry, Ledger};
 use crate::error::{Error, Result};
@@ -29,11 +29,11 @@ impl LedgerEntryRecord {
 }
 
 pub struct LedgerRepository {
-    db: Arc<Surreal<Client>>,
+    db: Arc<Surreal<Any>>,
 }
 
 impl LedgerRepository {
-    pub fn new(db: Arc<Surreal<Client>>) -> Self {
+    pub fn new(db: Arc<Surreal<Any>>) -> Self {
         Self { db }
     }
 
