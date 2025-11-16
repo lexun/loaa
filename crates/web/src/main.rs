@@ -12,17 +12,14 @@ async fn main() {
     let addr = leptos_options.site_addr;
     let routes = generate_route_list(App);
 
-    // Serve static files from multiple directories
-    let serve_style = ServeDir::new("crates/web/style");
-    let serve_pkg = ServeDir::new("target/site/pkg");
-
+    // Serve static files BEFORE leptos routes so they take precedence
     let app = Router::new()
+        .nest_service("/style", ServeDir::new("crates/web/style"))
+        .nest_service("/pkg", ServeDir::new("target/site/pkg"))
         .leptos_routes(&leptos_options, routes, {
             let leptos_options = leptos_options.clone();
             move || shell(leptos_options.clone())
         })
-        .nest_service("/style", serve_style)
-        .nest_service("/pkg", serve_pkg)
         .with_state(leptos_options);
 
     println!("🚀 Listening on http://{}", &addr);
