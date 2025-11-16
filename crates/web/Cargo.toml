@@ -18,8 +18,8 @@ path = "src/bin/seed.rs"
 required-features = ["ssr"]
 
 [[bin]]
-name = "simple_server"
-path = "src/bin/simple_server.rs"
+name = "create_transactions"
+path = "src/bin/create_transactions.rs"
 required-features = ["ssr"]
 
 [package.metadata.leptos]
