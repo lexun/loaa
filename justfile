@@ -2,55 +2,38 @@
 default:
     @just --list --unsorted
 
-# Start all services (foreground with TUI, -d for background daemon)
+# Start all services (foreground with TUI by default)
 [group('services')]
-start mode='':
-    #!/usr/bin/env bash
-    if [ "{{mode}}" = "-d" ]; then
-        echo "Starting services in background..."
-        PC_DISABLE_TUI=true nohup devenv up > .devenv/state/services.log 2>&1 &
-        echo $! > .devenv/state/services.pid
-        echo "Services started. PID: $(cat .devenv/state/services.pid)"
-        echo "View logs with: just logs"
-        echo "Attach TUI with: just start"
-    else
-        devenv up
-    fi
+start:
+    devenv up
 
-# Stop all services
+# Stop all services (run from another terminal, or use Ctrl+C in the TUI)
 [group('services')]
 stop:
     #!/usr/bin/env bash
-    if [ -f .devenv/state/services.pid ]; then
-        PID=$(cat .devenv/state/services.pid)
-        echo "Stopping services (PID: $PID)..."
-        kill $PID 2>/dev/null || echo "Process already stopped"
-        rm -f .devenv/state/services.pid
-    else
-        echo "No services.pid file found. Trying to find and stop processes..."
-        pkill -f "devenv up" || echo "No devenv processes found"
-        pkill -f surreal || echo "No surreal processes found"
-        pkill -f simple_server || echo "No web server processes found"
-    fi
+    echo "Stopping services..."
+    pkill -f "devenv up" || echo "No devenv processes found"
+    pkill -f "surreal start" || echo "No surreal processes found"
+    pkill -f "cargo leptos" || echo "No leptos processes found"
 
-# Restart all services (foreground by default, -d for background)
+# Restart all services
 [group('services')]
-restart mode='':
+restart:
     @just stop
-    @just start {{mode}}
+    @sleep 2
+    @just start
 
-# View service logs (all by default, or specify service: db, web)
+# View service logs (specify service: db, web, or leave empty for combined)
 [group('services')]
 logs service='':
     #!/usr/bin/env bash
     if [ -z "{{service}}" ]; then
         # Show combined logs
-        if [ -f .devenv/state/services.log ]; then
-            tail -f .devenv/state/services.log
-        elif [ -f .devenv/state/process-compose/process-compose.log ]; then
+        if [ -f .devenv/state/process-compose/process-compose.log ]; then
             tail -f .devenv/state/process-compose/process-compose.log
         else
-            echo "No log files found. Run 'just start' first."
+            echo "No log files found. Services may not be running yet."
+            echo "Run 'just start' to start services."
         fi
     else
         # Show specific service logs
