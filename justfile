@@ -81,11 +81,7 @@ reset:
     #!/usr/bin/env bash
     echo "Note: This requires 'just start' to be running in another terminal"
     echo ""
-    echo "Seeding database with fresh data..."
-    cargo run --bin seed --features ssr
-    echo ""
-    echo "Creating test transactions..."
-    cargo run --bin create_transactions --features ssr
+    cargo run --bin seed --features ssr -- --with-transactions
 
 # Seed the database with initial data - requires services to be running
 [group('database')]

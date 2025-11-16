@@ -169,7 +169,7 @@ fn format_time_ago(dt: chrono::DateTime<chrono::Utc>) -> String {
 
 #[component]
 pub fn LedgerView(kid_id: UuidDto, set_view: WriteSignal<View>) -> impl IntoView {
-    let ledger = create_resource(move || kid_id.clone(), |kid_id| get_ledger(kid_id));
+    let ledger = create_resource(move || kid_id.clone(), get_ledger);
 
     view! {
         <div class="ledger-view">

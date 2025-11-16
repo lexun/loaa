@@ -17,11 +17,6 @@ name = "seed"
 path = "src/bin/seed.rs"
 required-features = ["ssr"]
 
-[[bin]]
-name = "create_transactions"
-path = "src/bin/create_transactions.rs"
-required-features = ["ssr"]
-
 [package.metadata.leptos]
 output-name = "loaa-web"
 bin-target = "loaa-web"
