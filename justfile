@@ -27,6 +27,7 @@ stop:
     # Kill process-compose if still running (devenv adds --keep-project flag)
     pkill -f "process-compose.*devenv" || true
     # Clean up any orphaned service processes
+    pkill -f "cargo-leptos.*watch" || true
     pkill -f "target/debug/loaa-web" || true
     pkill -f "surreal start.*127.0.0.1:8000" || true
 
@@ -39,6 +40,7 @@ restart:
     process-compose down 2>/dev/null || true
     sleep 1
     pkill -f "process-compose.*devenv" || true
+    pkill -f "cargo-leptos.*watch" || true
     pkill -f "target/debug/loaa-web" || true
     pkill -f "surreal start.*127.0.0.1:8000" || true
     # Start fresh in background
