@@ -2,24 +2,35 @@
 default:
     @just --list --unsorted
 
-# Start all services (foreground with TUI by default)
+# Start all services in foreground with TUI (recommended for development)
 [group('services')]
 start:
     devenv up
 
-# Stop all services (run from another terminal, or use Ctrl+C in the TUI)
+# Start all services in background (detached mode)
+[group('services')]
+start-bg:
+    devenv processes up --detach
+
+# Attach to running services TUI
+[group('services')]
+attach:
+    process-compose attach
+
+# Stop all services gracefully
 [group('services')]
 stop:
-    #!/usr/bin/env bash
-    echo "Stopping services gracefully..."
-    process-compose down --ordered-shutdown || echo "No process-compose instance running"
+    devenv processes down
 
-# Restart all services
+# Restart all services (works whether running in foreground or background)
 [group('services')]
 restart:
-    @just stop
-    @sleep 2
-    @just start
+    #!/usr/bin/env bash
+    # Restart both services in the running process-compose instance
+    # This works regardless of who started it or whether TUI is attached
+    echo "Restarting services..."
+    process-compose process restart web || echo "Failed to restart web"
+    process-compose process restart db || echo "Failed to restart db"
 
 # View service logs (specify service: db, web, or leave empty for combined)
 [group('services')]
