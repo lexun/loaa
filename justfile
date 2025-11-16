@@ -22,15 +22,15 @@ attach:
 stop:
     devenv processes down
 
-# Restart all services (works whether running in foreground or background)
+# Restart all services (stops and starts in background)
 [group('services')]
 restart:
     #!/usr/bin/env bash
-    # Restart both services in the running process-compose instance
-    # This works regardless of who started it or whether TUI is attached
     echo "Restarting services..."
-    process-compose process restart web || echo "Failed to restart web"
-    process-compose process restart db || echo "Failed to restart db"
+    devenv processes down 2>/dev/null || true
+    sleep 1
+    devenv processes up --detach
+    echo "Services restarted in background. Run 'just attach' to view TUI."
 
 # View service logs (specify service: db, web, or leave empty for combined)
 [group('services')]
