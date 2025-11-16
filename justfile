@@ -51,18 +51,24 @@ logs service='':
 test:
     cargo test
 
-# Reset database (clean + seed)
+# Reset database (clean + seed) - requires services to be running
 [group('database')]
 reset:
     #!/usr/bin/env bash
-    echo "Cleaning database..."
-    rm -rf data/loaa.db
-    echo "Seeding database..."
+    echo "Note: This requires 'just start' to be running in another terminal"
+    echo ""
+    echo "Seeding database with fresh data..."
     cargo run --bin seed --features ssr
+    echo ""
+    echo "Creating test transactions..."
+    cargo run --bin create_transactions --features ssr
 
-# Seed the database with initial data
+# Seed the database with initial data - requires services to be running
 [group('database')]
 seed:
+    #!/usr/bin/env bash
+    echo "Note: This requires 'just start' to be running in another terminal"
+    echo ""
     cargo run --bin seed --features ssr
 
 # Clean the database (WARNING: deletes all data!)
