@@ -11,10 +11,8 @@ start:
 [group('services')]
 stop:
     #!/usr/bin/env bash
-    echo "Stopping services..."
-    pkill -f "devenv up" || echo "No devenv processes found"
-    pkill -f "surreal start" || echo "No surreal processes found"
-    pkill -f "cargo leptos" || echo "No leptos processes found"
+    echo "Stopping services gracefully..."
+    process-compose down --ordered-shutdown || echo "No process-compose instance running"
 
 # Restart all services
 [group('services')]
@@ -72,6 +70,10 @@ seed:
     cargo run --bin seed --features ssr
 
 # Clean the database (WARNING: deletes all data!)
+# Note: Database runs in-memory mode, so restart services to clean
 [group('database')]
 clean:
-    rm -rf data/loaa.db
+    #!/usr/bin/env bash
+    echo "Database runs in-memory mode."
+    echo "To clean the database, restart services with 'just restart'"
+    echo "Then run 'just seed' to populate with fresh data."
