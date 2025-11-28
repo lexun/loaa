@@ -2,7 +2,10 @@ use leptos::*;
 use crate::dto::*;
 
 #[cfg(feature = "ssr")]
-use loaa_core::{Database, KidRepository, TaskRepository, LedgerRepository, init_database, Uuid};
+use loaa_core::{
+    Database, KidRepository, TaskRepository, LedgerRepository,
+    init_database_with_config, Config, Uuid
+};
 #[cfg(feature = "ssr")]
 use loaa_core::models::*;
 #[cfg(feature = "ssr")]
@@ -14,15 +17,17 @@ use tokio::sync::OnceCell;
 #[cfg(feature = "ssr")]
 use std::str::FromStr;
 
-#[cfg(feature = "ssr")]
-static DB_URL: &str = "127.0.0.1:8000";
-
 // Helper to get database connection
 #[cfg(feature = "ssr")]
 async fn get_db() -> Result<Arc<Database>, ServerFnError> {
     static DB: OnceCell<Arc<Database>> = OnceCell::const_new();
     DB.get_or_try_init(|| async {
-        init_database(DB_URL).await
+        // Load configuration from environment
+        let config = Config::from_env();
+        config.validate()
+            .map_err(|e| ServerFnError::new(format!("Config validation error: {}", e)))?;
+
+        init_database_with_config(&config.database).await
             .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))
             .map(Arc::new)
     })

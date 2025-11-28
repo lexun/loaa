@@ -1,5 +1,6 @@
 use anyhow::Result;
-use loaa_core::db::{init_database, KidRepository, LedgerRepository, TaskRepository};
+use loaa_core::db::{init_database_with_config, KidRepository, LedgerRepository, TaskRepository};
+use loaa_core::config::{Config, DatabaseConfig};
 use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Task};
 use loaa_core::workflows::TaskCompletionWorkflow;
 use rmcp::handler::server::router::tool::ToolRouter;
@@ -95,8 +96,8 @@ struct AdjustBalanceParams {
 
 #[tool_router]
 impl LoaaServer {
-    async fn new(db_url: &str) -> Result<Self> {
-        let database = init_database(db_url).await?;
+    async fn new(db_config: &DatabaseConfig) -> Result<Self> {
+        let database = init_database_with_config(db_config).await?;
         let task_repo = TaskRepository::new(database.client.clone());
         let kid_repo = KidRepository::new(database.client.clone());
         let ledger_repo = LedgerRepository::new(database.client.clone());
@@ -490,13 +491,16 @@ impl rmcp::handler::server::ServerHandler for LoaaServer {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Get database URL from environment or use default
-    let db_url = std::env::var("LOAA_DB_URL").unwrap_or_else(|_| "127.0.0.1:8000".to_string());
-
     eprintln!("Initializing Loa'a MCP Server...");
-    eprintln!("Database URL: {}", db_url);
 
-    let server = LoaaServer::new(&db_url).await?;
+    // Load configuration from environment
+    let config = Config::from_env();
+    config.validate()
+        .map_err(|e| anyhow::anyhow!("Config validation error: {}", e))?;
+
+    eprintln!("Database mode: {:?}", config.database.mode);
+
+    let server = LoaaServer::new(&config.database).await?;
 
     eprintln!("Loa'a MCP Server started successfully!");
     eprintln!("Available tools:");
