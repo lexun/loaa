@@ -12,6 +12,7 @@ Cargo.lock
 
 # Database
 .data/
+data/
 *.db
 *.surreal
 history.txt

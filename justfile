@@ -75,27 +75,31 @@ logs service='':
 test:
     cargo test
 
-# Reset database (clean + seed) - requires services to be running
+# Reset database (clean + seed)
 [group('database')]
 reset:
     #!/usr/bin/env bash
-    echo "Note: This requires 'just start' to be running in another terminal"
-    echo ""
-    cargo run --bin seed --features ssr -- --with-transactions
+    export LOAA_DB_MODE="${LOAA_DB_MODE:-embedded}"
+    export LOAA_DB_PATH="${LOAA_DB_PATH:-./data/loaa.db}"
+    echo "Cleaning database at $LOAA_DB_PATH..."
+    rm -rf "$LOAA_DB_PATH"
+    echo "Seeding database with test data..."
+    cargo run -p loaa-web --bin seed --features ssr -- --with-transactions
 
-# Seed the database with initial data - requires services to be running
+# Seed the database with initial data
 [group('database')]
 seed:
     #!/usr/bin/env bash
-    echo "Note: This requires 'just start' to be running in another terminal"
-    echo ""
-    cargo run --bin seed --features ssr
+    export LOAA_DB_MODE="${LOAA_DB_MODE:-embedded}"
+    export LOAA_DB_PATH="${LOAA_DB_PATH:-./data/loaa.db}"
+    echo "Seeding database..."
+    cargo run -p loaa-web --bin seed --features ssr
 
 # Clean the database (WARNING: deletes all data!)
-# Note: Database runs in-memory mode, so restart services to clean
 [group('database')]
 clean:
     #!/usr/bin/env bash
-    echo "Database runs in-memory mode."
-    echo "To clean the database, restart services with 'just restart'"
-    echo "Then run 'just seed' to populate with fresh data."
+    export LOAA_DB_PATH="${LOAA_DB_PATH:-./data/loaa.db}"
+    echo "Cleaning database at $LOAA_DB_PATH..."
+    rm -rf "$LOAA_DB_PATH"
+    echo "Database cleaned. Run 'just seed' to populate with fresh data."
