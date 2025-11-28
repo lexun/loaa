@@ -1,3 +1,5 @@
+mod auth;
+
 use anyhow::Result;
 use loaa_core::db::{init_database_with_config, KidRepository, LedgerRepository, TaskRepository};
 use loaa_core::config::{Config, DatabaseConfig};
@@ -544,7 +546,7 @@ async fn run_stdio_server(server: LoaaServer) -> Result<()> {
 }
 
 async fn run_http_server(server: LoaaServer, config: &Config) -> Result<()> {
-    use axum::Router;
+    use axum::{Router, middleware};
     use rmcp::transport::streamable_http_server::{
         StreamableHttpService,
         session::local::LocalSessionManager,
@@ -561,6 +563,7 @@ async fn run_http_server(server: LoaaServer, config: &Config) -> Result<()> {
 
     eprintln!("Starting HTTP transport on {}...", addr);
     eprintln!("MCP endpoint: http://{}/mcp", addr);
+    eprintln!("⚠️  JWT authentication required for all requests");
 
     // Create HTTP service with local session management
     let service = StreamableHttpService::new(
@@ -569,8 +572,10 @@ async fn run_http_server(server: LoaaServer, config: &Config) -> Result<()> {
         Default::default(),
     );
 
-    // Create Axum router with MCP endpoint
-    let app = Router::new().nest_service("/mcp", service);
+    // Create Axum router with MCP endpoint and JWT validation middleware
+    let app = Router::new()
+        .nest_service("/mcp", service)
+        .layer(middleware::from_fn(auth::validate_jwt));
 
     // Start the HTTP server
     let listener = tokio::net::TcpListener::bind(&addr).await?;
