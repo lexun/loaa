@@ -12,34 +12,52 @@ body {
     min-height: 100vh;
 }
 
+.app-wrapper {
+    min-height: 100vh;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
 }
 
-header {
+/* Compact Navigation Bar */
+.navbar {
     background: rgba(255, 255, 255, 0.95);
-    padding: 40px;
-    margin-bottom: 30px;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
     backdrop-filter: blur(10px);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-header h1 {
-    font-size: 3em;
+.navbar-brand {
+    font-size: 1.5em;
+    font-weight: 800;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 10px;
-    font-weight: 800;
 }
 
-header p {
-    color: #718096;
-    font-size: 1.2em;
+.logout-btn {
+    padding: 8px 20px;
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+    border: 2px solid #e74c3c;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+    background: #e74c3c;
+    color: white;
+    transform: translateY(-1px);
 }
 
 main {

@@ -11,15 +11,7 @@ pub fn App() -> impl IntoView {
         <Link rel="stylesheet" href="/style/main.css"/>
         <Title text="Loa'a - Chore Tracker"/>
 
-        <div class="container">
-            <header>
-                <h1>"Loa'a"</h1>
-                <p>"Chore and rewards tracking system"</p>
-            </header>
-            <main>
-                <Dashboard />
-            </main>
-        </div>
+        <Dashboard />
     }
 }
 

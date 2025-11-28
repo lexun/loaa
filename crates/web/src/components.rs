@@ -115,17 +115,48 @@ pub fn Dashboard() -> impl IntoView {
         });
     });
 
+    let handle_logout = move |_| {
+        spawn_local(async move {
+            let _ = logout().await;
+            set_current_view.set(View::Login);
+        });
+    };
+
     view! {
-        <div class="dashboard">
+        <div class="app-wrapper">
             {move || match current_view.get() {
                 View::Login => view! {
                     <Login set_view=set_current_view />
                 }.into_view(),
                 View::Dashboard => view! {
-                    <DashboardView set_view=set_current_view />
+                    <div>
+                        <nav class="navbar">
+                            <div class="navbar-brand">"Loa'a"</div>
+                            <button class="logout-btn" on:click=handle_logout>
+                                "Log Out"
+                            </button>
+                        </nav>
+                        <div class="container">
+                            <main>
+                                <DashboardView set_view=set_current_view />
+                            </main>
+                        </div>
+                    </div>
                 }.into_view(),
                 View::Ledger(kid_id) => view! {
-                    <LedgerView kid_id=kid_id set_view=set_current_view />
+                    <div>
+                        <nav class="navbar">
+                            <div class="navbar-brand">"Loa'a"</div>
+                            <button class="logout-btn" on:click=handle_logout>
+                                "Log Out"
+                            </button>
+                        </nav>
+                        <div class="container">
+                            <main>
+                                <LedgerView kid_id=kid_id set_view=set_current_view />
+                            </main>
+                        </div>
+                    </div>
                 }.into_view(),
             }}
         </div>
