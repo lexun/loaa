@@ -3,8 +3,8 @@ use crate::dto::*;
 
 #[cfg(feature = "ssr")]
 use loaa_core::{
-    Database, KidRepository, TaskRepository, LedgerRepository,
-    init_database_with_config, Config, Uuid
+    Database, KidRepository, TaskRepository, LedgerRepository, UserRepository,
+    init_database_with_config, Config, Uuid, verify_password
 };
 #[cfg(feature = "ssr")]
 use loaa_core::models::*;
@@ -167,4 +167,27 @@ pub async fn get_recent_activity(limit: usize) -> Result<Vec<LedgerEntryDto>, Se
     all_entries.truncate(limit);
 
     Ok(all_entries.into_iter().map(Into::into).collect())
+}
+
+#[server]
+pub async fn login(username: String, password: String) -> Result<bool, ServerFnError> {
+    let db = get_db().await?;
+    let user_repo = UserRepository::new(db.client.clone());
+
+    // Look up user by username
+    let user = match user_repo.get_by_username(&username).await {
+        Ok(user) => user,
+        Err(_) => return Ok(false), // User not found
+    };
+
+    // Verify password
+    let is_valid = verify_password(&password, &user.password_hash)
+        .map_err(|e| ServerFnError::new(format!("Password verification error: {}", e)))?;
+
+    if is_valid {
+        // TODO: Set session cookie
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }

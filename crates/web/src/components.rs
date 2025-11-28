@@ -4,17 +4,103 @@ use crate::dto::*;
 
 #[derive(Debug, Clone)]
 pub enum View {
+    Login,
     Dashboard,
     Ledger(UuidDto),
 }
 
 #[component]
+pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
+    let (username, set_username) = create_signal(String::new());
+    let (password, set_password) = create_signal(String::new());
+    let (error, set_error) = create_signal(Option::<String>::None);
+    let (logging_in, set_logging_in) = create_signal(false);
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        set_error.set(None);
+        set_logging_in.set(true);
+
+        let username_val = username.get();
+        let password_val = password.get();
+
+        spawn_local(async move {
+            match login(username_val, password_val).await {
+                Ok(true) => {
+                    set_view.set(View::Dashboard);
+                }
+                Ok(false) => {
+                    set_error.set(Some("Invalid username or password".to_string()));
+                    set_logging_in.set(false);
+                }
+                Err(e) => {
+                    set_error.set(Some(format!("Login error: {}", e)));
+                    set_logging_in.set(false);
+                }
+            }
+        });
+    };
+
+    view! {
+        <div class="login-container">
+            <div class="login-box">
+                <h1>"Loa'a"</h1>
+                <p class="subtitle">"Chore and rewards tracking system"</p>
+
+                <form on:submit=on_submit>
+                    <div class="form-group">
+                        <label for="username">"Username"</label>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            required
+                            disabled=move || logging_in.get()
+                            on:input=move |ev| set_username.set(event_target_value(&ev))
+                            prop:value=move || username.get()
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">"Password"</label>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            required
+                            disabled=move || logging_in.get()
+                            on:input=move |ev| set_password.set(event_target_value(&ev))
+                            prop:value=move || password.get()
+                        />
+                    </div>
+
+                    {move || error.get().map(|err| view! {
+                        <p class="error">{err}</p>
+                    })}
+
+                    <button
+                        type="submit"
+                        class="login-btn"
+                        disabled=move || logging_in.get()
+                    >
+                        {move || if logging_in.get() { "Logging in..." } else { "Log In" }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+}
+
+#[component]
 pub fn Dashboard() -> impl IntoView {
-    let (current_view, set_current_view) = create_signal(View::Dashboard);
+    let (current_view, set_current_view) = create_signal(View::Login);
 
     view! {
         <div class="dashboard">
             {move || match current_view.get() {
+                View::Login => view! {
+                    <Login set_view=set_current_view />
+                }.into_view(),
                 View::Dashboard => view! {
                     <DashboardView set_view=set_current_view />
                 }.into_view(),

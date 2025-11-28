@@ -1,4 +1,7 @@
-use loaa_core::{init_database, Kid, KidRepository, Task, TaskRepository, Cadence, LedgerRepository, LedgerEntry};
+use loaa_core::{
+    init_database_with_config, Config, Kid, KidRepository, Task, TaskRepository,
+    Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password
+};
 use rust_decimal_macros::dec;
 
 #[tokio::main]
@@ -8,11 +11,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🌱 Seeding Loa'a database...\n");
 
-    // Initialize database - connect to SurrealDB server
-    let db_url = "127.0.0.1:8000";
-    let db = init_database(db_url).await?;
+    // Initialize database using config
+    let config = Config::from_env();
+    config.validate()?;
+    let db = init_database_with_config(&config.database).await?;
+
+    let user_repo = UserRepository::new(db.client.clone());
     let kid_repo = KidRepository::new(db.client.clone());
     let task_repo = TaskRepository::new(db.client.clone());
+
+    // Create admin user
+    println!("👤 Creating admin user...");
+    let mut admin_user = User::new("admin".to_string())?;
+    admin_user.password_hash = hash_password("admin123")?;
+    let created_user = user_repo.create(admin_user).await?;
+    println!("  ✓ Created user: {} (Default password: admin123)", created_user.username);
+    println!("  ⚠️  IMPORTANT: Change this password after first login!\n");
 
     // Create kids
     println!("👦 Creating kids...");
