@@ -500,6 +500,13 @@ async fn main() -> Result<()> {
 
     eprintln!("Database mode: {:?}", config.database.mode);
 
+    // Determine transport mode from environment
+    let transport_mode = std::env::var("LOAA_MCP_TRANSPORT")
+        .unwrap_or_else(|_| "stdio".to_string())
+        .to_lowercase();
+
+    eprintln!("Transport mode: {}", transport_mode);
+
     let server = LoaaServer::new(&config.database).await?;
 
     eprintln!("Loa'a MCP Server started successfully!");
@@ -514,12 +521,66 @@ async fn main() -> Result<()> {
     eprintln!("  - get_ledger: Get ledger for a kid");
     eprintln!("  - adjust_balance: Manually adjust a kid's balance");
 
-    // Use stdio transport
+    match transport_mode.as_str() {
+        "http" | "sse" => {
+            // HTTP/SSE transport for remote access
+            run_http_server(server, &config).await?;
+        }
+        "stdio" | _ => {
+            // Default: stdio transport for local use
+            run_stdio_server(server).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_stdio_server(server: LoaaServer) -> Result<()> {
+    eprintln!("Starting stdio transport...");
     use tokio::io::{stdin, stdout};
     let service = server.serve((stdin(), stdout())).await?;
-
-    // Keep the service running
     service.waiting().await?;
+    Ok(())
+}
+
+async fn run_http_server(server: LoaaServer, config: &Config) -> Result<()> {
+    use axum::Router;
+    use rmcp::transport::streamable_http_server::{
+        StreamableHttpService,
+        session::local::LocalSessionManager,
+    };
+
+    let host = std::env::var("LOAA_MCP_HOST")
+        .unwrap_or_else(|_| config.server.host.clone());
+    let port = std::env::var("LOAA_MCP_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3001);
+
+    let addr = format!("{}:{}", host, port);
+
+    eprintln!("Starting HTTP transport on {}...", addr);
+    eprintln!("MCP endpoint: http://{}/mcp", addr);
+
+    // Create HTTP service with local session management
+    let service = StreamableHttpService::new(
+        move || Ok(server.clone()),
+        LocalSessionManager::default().into(),
+        Default::default(),
+    );
+
+    // Create Axum router with MCP endpoint
+    let app = Router::new().nest_service("/mcp", service);
+
+    // Start the HTTP server
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    eprintln!("✓ HTTP server listening on {}", addr);
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            tokio::signal::ctrl_c().await.ok();
+        })
+        .await?;
 
     Ok(())
 }
