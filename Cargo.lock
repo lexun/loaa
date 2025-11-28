@@ -2617,8 +2617,10 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "axum 0.7.9",
+ "base64 0.22.1",
  "chrono",
  "console_error_panic_hook",
+ "jsonwebtoken",
  "leptos",
  "leptos_axum",
  "leptos_meta",
@@ -2628,12 +2630,14 @@ dependencies = [
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
+ "sha2",
  "tokio",
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tower-sessions",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "wasm-bindgen",
 ]
 

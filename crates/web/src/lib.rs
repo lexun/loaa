@@ -3,6 +3,9 @@ pub mod dto;
 pub mod server_functions;
 pub mod components;
 
+#[cfg(feature = "ssr")]
+pub mod oauth;
+
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
