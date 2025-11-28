@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  loaa:
+    build: .
+    ports:
+      - "3000:3000"  # Web UI and OAuth endpoints
+      - "3001:3001"  # MCP server (for Claude integration)
+    environment:
+      # Database configuration
+      - LOAA_DB_MODE=embedded
+      - LOAA_DB_PATH=/app/data/loaa.db
+
+      # Server configuration
+      - LOAA_INCLUDE_MCP=true
+      - LOAA_MCP_PORT=3001
+
+      # OAuth configuration
+      # IMPORTANT: Generate a secure secret with: openssl rand -base64 32
+      - LOAA_JWT_SECRET=${LOAA_JWT_SECRET:-insecure-default-change-me}
+      - LOAA_BASE_URL=${LOAA_BASE_URL:-http://localhost:3000}
+
+      # Logging
+      - RUST_LOG=info
+
+    volumes:
+      # Persist database
+      - loaa-data:/app/data
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/.well-known/oauth-authorization-server"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  loaa-data:
+    driver: local
