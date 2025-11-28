@@ -95,6 +95,26 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
 pub fn Dashboard() -> impl IntoView {
     let (current_view, set_current_view) = create_signal(View::Login);
 
+    // Check if user is authenticated on mount
+    create_effect(move |_| {
+        spawn_local(async move {
+            match check_auth().await {
+                Ok(true) => {
+                    // User is authenticated, show dashboard
+                    set_current_view.set(View::Dashboard);
+                }
+                Ok(false) => {
+                    // Not authenticated, show login
+                    set_current_view.set(View::Login);
+                }
+                Err(_) => {
+                    // Error checking auth, default to login
+                    set_current_view.set(View::Login);
+                }
+            }
+        });
+    });
+
     view! {
         <div class="dashboard">
             {move || match current_view.get() {

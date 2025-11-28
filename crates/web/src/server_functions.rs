@@ -16,6 +16,10 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 #[cfg(feature = "ssr")]
 use std::str::FromStr;
+#[cfg(feature = "ssr")]
+use tower_sessions::Session;
+#[cfg(feature = "ssr")]
+use leptos_axum::extract;
 
 // Helper to get database connection
 #[cfg(feature = "ssr")]
@@ -185,9 +189,41 @@ pub async fn login(username: String, password: String) -> Result<bool, ServerFnE
         .map_err(|e| ServerFnError::new(format!("Password verification error: {}", e)))?;
 
     if is_valid {
-        // TODO: Set session cookie
+        // Get session from Axum extractor
+        let session = extract::<Session>().await
+            .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+        // Store user ID in session
+        session.insert("user_id", user.id.to_string())
+            .await
+            .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
+
         Ok(true)
     } else {
         Ok(false)
     }
+}
+
+#[server]
+pub async fn logout() -> Result<(), ServerFnError> {
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    session.delete()
+        .await
+        .map_err(|e| ServerFnError::new(format!("Failed to delete session: {}", e)))?;
+
+    Ok(())
+}
+
+#[server]
+pub async fn check_auth() -> Result<bool, ServerFnError> {
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let user_id: Option<String> = session.get("user_id")
+        .await
+        .map_err(|e| ServerFnError::new(format!("Failed to get session: {}", e)))?;
+
+    Ok(user_id.is_some())
 }
