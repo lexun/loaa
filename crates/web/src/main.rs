@@ -14,6 +14,7 @@ async fn main() {
         OAuthState,
         AppState,
     };
+    use loaa_core::config::Config;
     use tower_http::services::ServeDir;
     use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
     use tower_sessions::cookie::time::Duration;
@@ -43,6 +44,25 @@ async fn main() {
     });
 
     println!("🔐 OAuth base URL: {}", base_url);
+
+    // Check if we should include MCP server
+    let config = Config::from_env();
+    let include_mcp = config.server.include_mcp;
+
+    if include_mcp {
+        println!("📦 All-in-one mode: MCP server will be started");
+
+        // Spawn MCP server in background
+        let mcp_config = config.clone();
+        let mcp_jwt_secret = jwt_secret.clone();
+        let mcp_base_url = base_url.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = loaa_web::mcp::start_mcp_server(mcp_config, mcp_jwt_secret, mcp_base_url).await {
+                eprintln!("❌ MCP server error: {}", e);
+            }
+        });
+    }
 
     // Create combined application state
     let app_state = AppState {

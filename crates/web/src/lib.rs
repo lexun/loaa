@@ -6,6 +6,9 @@ pub mod components;
 #[cfg(feature = "ssr")]
 pub mod oauth;
 
+#[cfg(feature = "ssr")]
+pub mod mcp;
+
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
