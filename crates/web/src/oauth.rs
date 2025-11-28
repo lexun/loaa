@@ -10,6 +10,7 @@ use chrono::{DateTime, Utc, Duration};
 use sha2::{Sha256, Digest};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use uuid::Uuid;
+use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey, Algorithm};
 
 /// OAuth 2.1 Authorization Server Metadata (RFC 8414)
 #[derive(Serialize)]
@@ -51,6 +52,23 @@ pub struct TokenParams {
     pub redirect_uri: String,
 }
 
+/// JWT Claims structure
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    /// Subject (user ID)
+    pub sub: String,
+    /// Issuer
+    pub iss: String,
+    /// Audience
+    pub aud: String,
+    /// Expiration time (Unix timestamp)
+    pub exp: i64,
+    /// Issued at (Unix timestamp)
+    pub iat: i64,
+    /// OAuth scopes
+    pub scope: String,
+}
+
 /// Token response
 #[derive(Serialize)]
 pub struct TokenResponse {
@@ -75,28 +93,15 @@ pub struct AuthorizationCode {
     pub expires_at: DateTime<Utc>,
 }
 
-/// Access token storage
-#[derive(Clone)]
-pub struct AccessToken {
-    pub token: String,
-    pub client_id: String,
-    pub user_id: String,
-    pub scope: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: DateTime<Utc>,
-}
-
-/// OAuth state storage
+/// OAuth state storage (only authorization codes - tokens are stateless JWTs)
 pub struct OAuthState {
     pub codes: HashMap<String, AuthorizationCode>,
-    pub tokens: HashMap<String, AccessToken>,
 }
 
 impl OAuthState {
     pub fn new() -> Self {
         Self {
             codes: HashMap::new(),
-            tokens: HashMap::new(),
         }
     }
 
@@ -131,14 +136,16 @@ impl OAuthState {
         code
     }
 
-    /// Exchange authorization code for access token
+    /// Exchange authorization code for JWT access token
     pub fn exchange_code(
         &mut self,
         code: &str,
         client_id: &str,
         code_verifier: &str,
         redirect_uri: &str,
-    ) -> Result<AccessToken, String> {
+        jwt_secret: &str,
+        issuer: &str,
+    ) -> Result<(String, i64), String> {
         // Get the authorization code
         let auth_code = self.codes.get(code)
             .ok_or_else(|| "Invalid authorization code".to_string())?;
@@ -174,48 +181,53 @@ impl OAuthState {
             return Err("Invalid code verifier".to_string());
         }
 
-        // Generate access token
-        let token = Uuid::new_v4().to_string();
-        let now = Utc::now();
-        let access_token = AccessToken {
-            token: token.clone(),
-            client_id: auth_code.client_id.clone(),
-            user_id: auth_code.user_id.clone(),
+        // Create JWT access token
+        let now = Utc::now().timestamp();
+        let expires_in = 86400; // 24 hours
+        let claims = Claims {
+            sub: auth_code.user_id.clone(),
+            iss: issuer.to_string(),
+            aud: "loaa-mcp".to_string(),
+            exp: now + expires_in,
+            iat: now,
             scope: auth_code.scope.clone(),
-            created_at: now,
-            expires_at: now + Duration::hours(24),
         };
 
-        // Store token
-        self.tokens.insert(token.clone(), access_token.clone());
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(jwt_secret.as_ref())
+        ).map_err(|e| format!("Failed to create JWT: {}", e))?;
 
         // Remove used authorization code
         self.codes.remove(code);
 
-        Ok(access_token)
+        Ok((token, expires_in))
     }
 
-    /// Validate an access token
-    pub fn validate_token(&self, token: &str) -> Result<&AccessToken, String> {
-        let access_token = self.tokens.get(token)
-            .ok_or_else(|| "Invalid token".to_string())?;
-
-        if Utc::now() > access_token.expires_at {
-            return Err("Token expired".to_string());
-        }
-
-        Ok(access_token)
-    }
-
-    /// Clean up expired codes and tokens
+    /// Clean up expired authorization codes
     pub fn cleanup_expired(&mut self) {
         let now = Utc::now();
         self.codes.retain(|_, code| code.expires_at > now);
-        self.tokens.retain(|_, token| token.expires_at > now);
     }
 }
 
 pub type SharedOAuthState = Arc<RwLock<OAuthState>>;
+
+/// Validate a JWT access token
+pub fn validate_jwt(token: &str, jwt_secret: &str, expected_issuer: &str) -> Result<Claims, String> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_issuer(&[expected_issuer]);
+    validation.set_audience(&["loaa-mcp"]);
+
+    decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(jwt_secret.as_ref()),
+        &validation
+    )
+    .map(|data| data.claims)
+    .map_err(|e| format!("JWT validation failed: {}", e))
+}
 
 /// Combined application state for OAuth and Leptos
 #[derive(Clone)]
@@ -223,6 +235,7 @@ pub struct AppState {
     pub leptos_options: leptos::LeptosOptions,
     pub oauth_state: SharedOAuthState,
     pub base_url: String,
+    pub jwt_secret: String,
 }
 
 // Implement FromRef so Leptos can extract LeptosOptions from AppState
@@ -346,7 +359,7 @@ pub async fn authorize_get(
 }
 
 /// OAuth token endpoint (POST)
-/// This exchanges the authorization code for an access token
+/// This exchanges the authorization code for a JWT access token
 pub async fn token_post(
     State(app_state): State<AppState>,
     axum::Form(params): axum::Form<TokenParams>,
@@ -359,13 +372,15 @@ pub async fn token_post(
         ).into());
     }
 
-    // Exchange authorization code for access token
+    // Exchange authorization code for JWT access token
     let mut oauth_state = app_state.oauth_state.write().await;
-    let access_token = oauth_state.exchange_code(
+    let (jwt_token, expires_in) = oauth_state.exchange_code(
         &params.code,
         &params.client_id,
         &params.code_verifier,
         &params.redirect_uri,
+        &app_state.jwt_secret,
+        &app_state.base_url,
     ).map_err(|e| (
         axum::http::StatusCode::BAD_REQUEST,
         format!("Token exchange failed: {}", e),
@@ -373,10 +388,8 @@ pub async fn token_post(
     drop(oauth_state);
 
     // Return token response
-    let expires_in = (access_token.expires_at - access_token.created_at).num_seconds();
-
     Ok(Json(TokenResponse {
-        access_token: access_token.token,
+        access_token: jwt_token,
         token_type: "Bearer".to_string(),
         expires_in,
         refresh_token: None, // We don't support refresh tokens yet

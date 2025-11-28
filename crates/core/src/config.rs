@@ -36,6 +36,8 @@ pub struct ServerConfig {
     pub port: u16,
     /// Whether to run MCP server in the same process
     pub include_mcp: bool,
+    /// JWT secret for signing access tokens
+    pub jwt_secret: String,
 }
 
 impl Default for Config {
@@ -50,6 +52,7 @@ impl Default for Config {
                 host: "127.0.0.1".to_string(),
                 port: 3000,
                 include_mcp: false,
+                jwt_secret: "insecure-default-change-me".to_string(),
             },
         }
     }
@@ -80,6 +83,11 @@ impl Config {
             .ok()
             .map(|s| s.to_lowercase() == "true" || s == "1")
             .unwrap_or(false);
+        let jwt_secret = std::env::var("LOAA_JWT_SECRET").unwrap_or_else(|_| {
+            eprintln!("WARNING: LOAA_JWT_SECRET not set. Using insecure default.");
+            eprintln!("Generate a secure secret with: openssl rand -base64 32");
+            "insecure-default-change-me".to_string()
+        });
 
         Self {
             database: DatabaseConfig {
@@ -91,6 +99,7 @@ impl Config {
                 host: server_host,
                 port: server_port,
                 include_mcp,
+                jwt_secret,
             },
         }
     }
@@ -132,6 +141,7 @@ mod tests {
         assert_eq!(config.server.host, "127.0.0.1");
         assert_eq!(config.server.port, 3000);
         assert!(!config.server.include_mcp);
+        assert_eq!(config.server.jwt_secret, "insecure-default-change-me");
     }
 
     #[test]

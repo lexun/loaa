@@ -35,6 +35,13 @@ async fn main() {
     let base_url = std::env::var("LOAA_BASE_URL")
         .unwrap_or_else(|_| format!("http://{}", addr));
 
+    // Get JWT secret from environment
+    let jwt_secret = std::env::var("LOAA_JWT_SECRET").unwrap_or_else(|_| {
+        eprintln!("⚠️  WARNING: LOAA_JWT_SECRET not set. Using insecure default.");
+        eprintln!("   Generate a secure secret with: openssl rand -base64 32");
+        "insecure-default-change-me".to_string()
+    });
+
     println!("🔐 OAuth base URL: {}", base_url);
 
     // Create combined application state
@@ -42,6 +49,7 @@ async fn main() {
         leptos_options: leptos_options.clone(),
         oauth_state: Arc::new(RwLock::new(OAuthState::new())),
         base_url,
+        jwt_secret,
     };
 
     // Serve static files BEFORE leptos routes so they take precedence
