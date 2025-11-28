@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{State, Query},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -255,4 +255,130 @@ pub async fn get_protected_resource_metadata(
         resource: format!("{}/mcp", app_state.base_url),
         authorization_servers: vec![app_state.base_url],
     })
+}
+
+/// OAuth authorization endpoint (GET)
+/// This handles the initial authorization request from Claude
+pub async fn authorize_get(
+    State(app_state): State<AppState>,
+    Query(params): axum::extract::Query<AuthorizeParams>,
+    session: tower_sessions::Session,
+) -> axum::response::Result<axum::response::Response> {
+    use axum::response::{Redirect, IntoResponse};
+
+    // Check if user is authenticated
+    let user_id: Option<String> = session.get("user_id")
+        .await
+        .map_err(|e| (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Session error: {}", e)
+        ))?;
+
+    // If not authenticated, redirect to login with return URL
+    if user_id.is_none() {
+        // Store OAuth params in session for after login
+        session.insert("oauth_client_id", params.client_id)
+            .await
+            .map_err(|e| (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Session error: {}", e)
+            ))?;
+        session.insert("oauth_redirect_uri", params.redirect_uri)
+            .await
+            .map_err(|e| (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Session error: {}", e)
+            ))?;
+        session.insert("oauth_scope", params.scope)
+            .await
+            .map_err(|e| (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Session error: {}", e)
+            ))?;
+        session.insert("oauth_state", params.state)
+            .await
+            .map_err(|e| (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Session error: {}", e)
+            ))?;
+        session.insert("oauth_code_challenge", params.code_challenge)
+            .await
+            .map_err(|e| (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Session error: {}", e)
+            ))?;
+        session.insert("oauth_code_challenge_method", params.code_challenge_method)
+            .await
+            .map_err(|e| (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Session error: {}", e)
+            ))?;
+
+        // Redirect to login (Leptos will handle rendering the login page)
+        return Ok(Redirect::to("/").into_response());
+    }
+
+    // User is authenticated - show consent page
+    let user_id = user_id.unwrap();
+
+    // For now, auto-approve (later we can add a consent UI)
+    // Generate authorization code
+    let mut oauth_state = app_state.oauth_state.write().await;
+    let code = oauth_state.create_authorization_code(
+        params.client_id.clone(),
+        params.redirect_uri.clone(),
+        params.scope.clone(),
+        params.code_challenge.clone(),
+        params.code_challenge_method.clone(),
+        user_id,
+    );
+    drop(oauth_state);
+
+    // Redirect back to Claude with authorization code
+    let redirect_url = format!(
+        "{}?code={}&state={}",
+        params.redirect_uri,
+        code,
+        params.state
+    );
+
+    Ok(Redirect::to(&redirect_url).into_response())
+}
+
+/// OAuth token endpoint (POST)
+/// This exchanges the authorization code for an access token
+pub async fn token_post(
+    State(app_state): State<AppState>,
+    axum::Form(params): axum::Form<TokenParams>,
+) -> axum::response::Result<Json<TokenResponse>> {
+    // Validate grant_type
+    if params.grant_type != "authorization_code" {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "Unsupported grant_type. Only 'authorization_code' is supported.".to_string(),
+        ).into());
+    }
+
+    // Exchange authorization code for access token
+    let mut oauth_state = app_state.oauth_state.write().await;
+    let access_token = oauth_state.exchange_code(
+        &params.code,
+        &params.client_id,
+        &params.code_verifier,
+        &params.redirect_uri,
+    ).map_err(|e| (
+        axum::http::StatusCode::BAD_REQUEST,
+        format!("Token exchange failed: {}", e),
+    ))?;
+    drop(oauth_state);
+
+    // Return token response
+    let expires_in = (access_token.expires_at - access_token.created_at).num_seconds();
+
+    Ok(Json(TokenResponse {
+        access_token: access_token.token,
+        token_type: "Bearer".to_string(),
+        expires_in,
+        refresh_token: None, // We don't support refresh tokens yet
+    }))
 }

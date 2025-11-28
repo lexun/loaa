@@ -2,13 +2,15 @@
 #[tokio::main]
 async fn main() {
     use axum::Router;
-    use axum::routing::get;
+    use axum::routing::{get, post};
     use leptos::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
     use loaa_web::app::*;
     use loaa_web::oauth::{
         get_authorization_server_metadata,
         get_protected_resource_metadata,
+        authorize_get,
+        token_post,
         OAuthState,
         AppState,
     };
@@ -53,6 +55,9 @@ async fn main() {
             "/.well-known/oauth-protected-resource",
             get(get_protected_resource_metadata),
         )
+        // OAuth flow endpoints
+        .route("/oauth/authorize", get(authorize_get))
+        .route("/oauth/token", post(token_post))
         // Static files
         .nest_service("/style", ServeDir::new("crates/web/style"))
         .nest_service("/pkg", ServeDir::new("target/site/pkg"))
