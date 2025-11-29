@@ -4,6 +4,10 @@ devenv.local.nix
 
 # Direnv
 .direnv
+.envrc.local
+.env
+.env.*
+!.env.example
 
 # Rust
 target/
@@ -31,3 +35,7 @@ Thumbs.db
 # Build artifacts
 dist/
 *.log
+
+# MCP
+.mcp.json
+.playwright-mcp/

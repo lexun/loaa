@@ -1,5 +1,0 @@
-# Enable all-in-one mode for testing
-export LOAA_INCLUDE_MCP=true
-export LOAA_MCP_PORT=3001
-export LOAA_BASE_URL=http://127.0.0.1:3000
-export LOAA_JWT_SECRET=test-secret-for-local-development-only
