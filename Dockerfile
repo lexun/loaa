@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Loa'a
 # Builds both web server and MCP server in a single image
 
-FROM rust:1.83-slim-bookworm AS builder
+FROM rustlang/rust:nightly-bookworm-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -11,9 +11,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install cargo-leptos for building the web application
-# Use --locked to prevent dependency resolution to edition2024 crates
-RUN cargo install cargo-leptos --version 0.2.20 --locked || \
-    cargo install cargo-leptos --git https://github.com/leptos-rs/cargo-leptos --tag v0.2.20
+RUN cargo install cargo-leptos
 
 # Set working directory
 WORKDIR /app
