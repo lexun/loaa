@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     make \
     && rm -rf /var/lib/apt/lists/*
 
+# Install WASM target for Leptos frontend compilation
+RUN rustup target add wasm32-unknown-unknown
+
 # Install cargo-leptos for building the web application
 RUN cargo install cargo-leptos
 
