@@ -62,6 +62,7 @@ uuid = { version = "1.11", features = ["v4", "serde"], optional = true }
 rmcp = { version = "0.8.5", features = ["server", "macros", "transport-streamable-http-server"], optional = true }
 schemars = { version = "1.0", optional = true }
 serde_json = { version = "1.0", optional = true }
+anyhow = { version = "1.0", optional = true }
 
 [features]
 hydrate = [
@@ -90,6 +91,7 @@ ssr = [
     "dep:rmcp",
     "dep:schemars",
     "dep:serde_json",
+    "dep:anyhow",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
