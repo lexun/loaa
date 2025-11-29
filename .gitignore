@@ -12,7 +12,8 @@ devenv.local.nix
 # Rust
 target/
 **/*.rs.bk
-Cargo.lock
+# Note: Cargo.lock should be committed for binary projects
+# Cargo.lock
 
 # Database
 .data/
