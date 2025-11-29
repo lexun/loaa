@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     perl \
     make \
+    clang \
+    libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install WASM target for Leptos frontend compilation
