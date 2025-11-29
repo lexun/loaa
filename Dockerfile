@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     curl \
+    perl \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
 # Install cargo-leptos for building the web application
