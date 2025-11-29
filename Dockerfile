@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install cargo-leptos for building the web application
-# Pin to 0.2.20 which is compatible with Rust 1.83
-RUN cargo install cargo-leptos --version 0.2.20
+# Use --locked to prevent dependency resolution to edition2024 crates
+RUN cargo install cargo-leptos --version 0.2.20 --locked || \
+    cargo install cargo-leptos --git https://github.com/leptos-rs/cargo-leptos --tag v0.2.20
 
 # Set working directory
 WORKDIR /app
