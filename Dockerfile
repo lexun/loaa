@@ -26,6 +26,9 @@ RUN apt-get update && apt-get install -y \
     libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Set LIBCLANG_PATH for rocksdb bindgen
+ENV LIBCLANG_PATH=/usr/lib/llvm-14/lib
+
 # Install WASM target for Leptos frontend compilation
 RUN rustup target add wasm32-unknown-unknown
 
