@@ -244,7 +244,9 @@ pub async fn check_pending_oauth() -> Result<Option<String>, ServerFnError> {
         return Ok(None);
     }
 
-    // Get all OAuth parameters
+    // Get all OAuth parameters (unwrap client_id since we checked it's Some above)
+    let client_id = client_id.unwrap();
+
     let redirect_uri: String = session.get("oauth_redirect_uri").await
         .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?
         .ok_or_else(|| ServerFnError::new("Missing redirect_uri".to_string()))?;
