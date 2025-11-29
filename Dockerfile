@@ -1,7 +1,19 @@
-# Multi-stage Dockerfile for Loa'a
-# Builds both web server and MCP server in a single image
+# Multi-stage Dockerfile for Loa'a with optimized caching
+# Uses cargo-chef to cache dependencies separately from application code
 
-FROM rustlang/rust:nightly-bookworm-slim AS builder
+# 1. Prepare recipe for dependency caching
+FROM rustlang/rust:nightly-bookworm-slim AS chef
+RUN cargo install cargo-chef
+WORKDIR /app
+
+# 2. Compute dependency recipe
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN cargo chef prepare --recipe-path recipe.json
+
+# 3. Build dependencies (this layer is cached unless dependencies change)
+FROM chef AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -23,22 +35,35 @@ RUN cargo install wasm-bindgen-cli --version 0.2.105
 # Install cargo-leptos for building the web application
 RUN cargo install cargo-leptos
 
-# Set working directory
-WORKDIR /app
+# Copy dependency recipe and build dependencies
+COPY --from=planner /app/recipe.json recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo chef cook --release --recipe-path recipe.json
 
-# Copy workspace files
+# 4. Build application (dependencies are already cached)
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 
 # Build the web application (includes embedded MCP server capability)
 WORKDIR /app/crates/web
-RUN cargo leptos build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo leptos build --release && \
+    cp /app/target/release/loaa-web /tmp/loaa-web && \
+    cp -r /app/target/site /tmp/site
 
 # Build the standalone MCP server
 WORKDIR /app/crates/mcp
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release && \
+    cp /app/target/release/loaa-mcp /tmp/loaa-mcp
 
-# Runtime stage
+# 5. Runtime stage (minimal final image)
 FROM debian:bookworm-slim
 
 # Install runtime dependencies
@@ -53,9 +78,9 @@ RUN useradd -m -u 1000 loaa
 WORKDIR /app
 
 # Copy compiled binaries from builder
-COPY --from=builder /app/target/release/loaa-web ./loaa-web
-COPY --from=builder /app/target/release/loaa-mcp ./loaa-mcp
-COPY --from=builder /app/target/site ./site
+COPY --from=builder /tmp/loaa-web ./loaa-web
+COPY --from=builder /tmp/loaa-mcp ./loaa-mcp
+COPY --from=builder /tmp/site ./site
 
 # Copy static assets
 COPY --from=builder /app/crates/web/style ./style
