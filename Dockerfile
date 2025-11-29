@@ -32,8 +32,8 @@ ENV LIBCLANG_PATH=/usr/lib/llvm-14/lib
 # Install WASM target for Leptos frontend compilation
 RUN rustup target add wasm32-unknown-unknown
 
-# Install wasm-bindgen-cli matching the version in Cargo.lock (0.2.105)
-RUN cargo install wasm-bindgen-cli --version 0.2.105
+# Install wasm-bindgen-cli matching the version in Cargo.lock (0.2.106)
+RUN cargo install wasm-bindgen-cli --version 0.2.106
 
 # Install cargo-leptos for building the web application
 RUN cargo install cargo-leptos
