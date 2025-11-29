@@ -1,0 +1,116 @@
+name: Setup Infrastructure
+
+# This workflow sets up the initial Digital Ocean infrastructure
+# Run this ONCE before your first deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Domain name (e.g., loaa.yourdomain.com)'
+        required: true
+      do_token:
+        description: 'Digital Ocean API Token'
+        required: true
+      ssh_key_fingerprint:
+        description: 'SSH Key Fingerprint from Digital Ocean'
+        required: true
+
+jobs:
+  setup:
+    name: Provision Infrastructure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Create Terraform variables
+        run: |
+          cd terraform
+          cat > terraform.tfvars << EOF
+          do_token            = "${{ github.event.inputs.do_token }}"
+          domain              = "${{ github.event.inputs.domain }}"
+          ssh_key_fingerprint = "${{ github.event.inputs.ssh_key_fingerprint }}"
+          EOF
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Terraform Plan
+        run: |
+          cd terraform
+          terraform plan -var-file=terraform.tfvars
+
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform apply -var-file=terraform.tfvars -auto-approve
+
+      - name: Get Droplet IP
+        id: droplet
+        run: |
+          cd terraform
+          DROPLET_IP=$(terraform output -raw droplet_ip)
+          echo "ip=$DROPLET_IP" >> $GITHUB_OUTPUT
+          echo "Droplet IP: $DROPLET_IP"
+
+      - name: Wait for droplet to be ready
+        run: |
+          echo "Waiting for droplet to be ready..."
+          sleep 60
+
+      - name: Setup SSL Certificate
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.droplet.outputs.ip }}
+          username: root
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            # Install certbot
+            apt-get update
+            apt-get install -y certbot curl
+
+            # Get SSL certificate
+            certbot certonly --standalone \
+              -d ${{ github.event.inputs.domain }} \
+              --non-interactive \
+              --agree-tos \
+              -m admin@${{ github.event.inputs.domain }}
+
+            # Create .env file
+            cat > /opt/loaa/.env << 'ENV_EOF'
+            LOAA_JWT_SECRET=$(openssl rand -base64 32)
+            LOAA_BASE_URL=https://${{ github.event.inputs.domain }}
+            LOAA_INCLUDE_MCP=true
+            LOAA_MCP_PORT=3001
+            ENV_EOF
+
+            echo "✅ Infrastructure setup complete!"
+
+      - name: Setup Instructions
+        run: |
+          echo "🎉 Infrastructure provisioned successfully!"
+          echo ""
+          echo "📋 Next steps:"
+          echo "1. Add these GitHub Secrets (Settings → Secrets):"
+          echo "   - DROPLET_IP: ${{ steps.droplet.outputs.ip }}"
+          echo "   - DROPLET_SSH_KEY: (your private SSH key)"
+          echo "   - DOMAIN: ${{ github.event.inputs.domain }}"
+          echo ""
+          echo "2. Configure DNS in Squarespace:"
+          echo "   Type: A Record"
+          echo "   Host: (subdomain)"
+          echo "   Points to: ${{ steps.droplet.outputs.ip }}"
+          echo "   TTL: 3600"
+          echo ""
+          echo "3. Wait 5-10 minutes for DNS propagation"
+          echo ""
+          echo "4. Push to main branch to trigger deployment!"

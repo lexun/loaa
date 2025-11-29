@@ -175,6 +175,30 @@ pub async fn get_recent_activity(limit: usize) -> Result<Vec<LedgerEntryDto>, Se
 
 #[server]
 pub async fn login(username: String, password: String) -> Result<bool, ServerFnError> {
+    // Special case: admin user authenticated via environment variable
+    if username == "admin" {
+        let admin_password = std::env::var("LOAA_ADMIN_PASSWORD")
+            .map_err(|_| ServerFnError::new("Admin password not configured. Set LOAA_ADMIN_PASSWORD environment variable.".to_string()))?;
+
+        if password == admin_password {
+            // Get session from Axum extractor
+            let session = extract::<Session>().await
+                .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+            // Store special admin marker in session
+            session.insert("user_id", "admin".to_string())
+                .await
+                .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
+
+            eprintln!("✅ Admin login successful");
+            return Ok(true);
+        } else {
+            eprintln!("❌ Admin login failed: incorrect password");
+            return Ok(false);
+        }
+    }
+
+    // Regular database users (for future multi-user support)
     let db = get_db().await?;
     let user_repo = UserRepository::new(db.client.clone());
 
@@ -202,6 +226,54 @@ pub async fn login(username: String, password: String) -> Result<bool, ServerFnE
     } else {
         Ok(false)
     }
+}
+
+#[server]
+pub async fn check_pending_oauth() -> Result<Option<String>, ServerFnError> {
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    // Check if there's a pending OAuth flow
+    let client_id: Option<String> = session.get("oauth_client_id").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    eprintln!("🔍 check_pending_oauth: client_id = {:?}", client_id);
+
+    if client_id.is_none() {
+        eprintln!("🔍 check_pending_oauth: No pending OAuth found");
+        return Ok(None);
+    }
+
+    // Get all OAuth parameters
+    let redirect_uri: String = session.get("oauth_redirect_uri").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?
+        .ok_or_else(|| ServerFnError::new("Missing redirect_uri".to_string()))?;
+
+    let scope: String = session.get("oauth_scope").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?
+        .ok_or_else(|| ServerFnError::new("Missing scope".to_string()))?;
+
+    let state: String = session.get("oauth_state").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?
+        .ok_or_else(|| ServerFnError::new("Missing state".to_string()))?;
+
+    let code_challenge: String = session.get("oauth_code_challenge").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?
+        .ok_or_else(|| ServerFnError::new("Missing code_challenge".to_string()))?;
+
+    let code_challenge_method: String = session.get("oauth_code_challenge_method").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?
+        .ok_or_else(|| ServerFnError::new("Missing code_challenge_method".to_string()))?;
+
+    // Build the OAuth authorize URL
+    let oauth_url = format!(
+        "/oauth/authorize?client_id={}&redirect_uri={}&scope={}&state={}&code_challenge={}&code_challenge_method={}",
+        client_id, redirect_uri, scope, state, code_challenge, code_challenge_method
+    );
+
+    eprintln!("🔍 check_pending_oauth: Built OAuth URL: {}", oauth_url);
+
+    Ok(Some(oauth_url))
 }
 
 #[server]

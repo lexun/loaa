@@ -27,7 +27,28 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
         spawn_local(async move {
             match login(username_val, password_val).await {
                 Ok(true) => {
-                    set_view.set(View::Dashboard);
+                    // Check if there's a pending OAuth flow
+                    match check_pending_oauth().await {
+                        Ok(Some(oauth_url)) => {
+                            // Redirect to OAuth authorization endpoint
+                            leptos::logging::log!("Redirecting to OAuth: {}", oauth_url);
+                            let window = leptos::window();
+                            if let Ok(location) = window.location().href() {
+                                leptos::logging::log!("Current location: {}", location);
+                            }
+                            let _ = window.location().set_href(&oauth_url);
+                        }
+                        Ok(None) => {
+                            leptos::logging::log!("No pending OAuth, going to dashboard");
+                            // No pending OAuth, go to dashboard
+                            set_view.set(View::Dashboard);
+                        }
+                        Err(e) => {
+                            leptos::logging::log!("Error checking OAuth: {}", e);
+                            // Error checking OAuth, default to dashboard
+                            set_view.set(View::Dashboard);
+                        }
+                    }
                 }
                 Ok(false) => {
                     set_error.set(Some("Invalid username or password".to_string()));

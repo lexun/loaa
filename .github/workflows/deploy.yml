@@ -1,0 +1,151 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix={{branch}}-
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+      - name: Image digest
+        run: echo "Image pushed with tags ${{ steps.meta.outputs.tags }}"
+
+  deploy:
+    name: Deploy to Digital Ocean
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code (for docker-compose.yml)
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          envs: IMAGE_TAG
+          script: |
+            # Create app directory if it doesn't exist
+            mkdir -p /opt/loaa
+            cd /opt/loaa
+
+            # Login to GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Create or update docker-compose.yml
+            cat > docker-compose.yml << 'EOF'
+            version: '3.8'
+
+            services:
+              loaa:
+                image: ${IMAGE_TAG}
+                container_name: loaa-web
+                ports:
+                  - "3000:3000"
+                  - "3001:3001"
+                environment:
+                  - LOAA_DB_MODE=embedded
+                  - LOAA_DB_PATH=/app/data/loaa.db
+                  - LOAA_INCLUDE_MCP=true
+                  - LOAA_MCP_PORT=3001
+                env_file:
+                  - .env
+                volumes:
+                  - ${LOAA_DATA_DIR:-./data}:/app/data
+                restart: unless-stopped
+                healthcheck:
+                  test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+                  interval: 30s
+                  timeout: 10s
+                  retries: 3
+                  start_period: 40s
+            EOF
+
+            # Pull latest image
+            export IMAGE_TAG="${IMAGE_TAG}"
+            docker-compose pull
+
+            # Restart services with zero-downtime
+            docker-compose up -d --remove-orphans
+
+            # Clean up old images
+            docker image prune -af --filter "until=24h"
+
+            # Show status
+            docker-compose ps
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: root
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/loaa
+
+            # Wait for health check
+            echo "Waiting for service to be healthy..."
+            sleep 10
+
+            # Check if container is running
+            if docker-compose ps | grep -q "Up"; then
+              echo "✅ Deployment successful!"
+              docker-compose ps
+            else
+              echo "❌ Deployment failed!"
+              docker-compose logs --tail=50
+              exit 1
+            fi
+
+      - name: Post deployment notification
+        if: success()
+        run: |
+          echo "🎉 Deployment successful!"
+          echo "Web: https://${{ secrets.DOMAIN }}"
+          echo "MCP: https://${{ secrets.DOMAIN }}:3001/mcp"

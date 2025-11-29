@@ -279,6 +279,8 @@ pub async fn authorize_get(
 ) -> axum::response::Result<axum::response::Response> {
     use axum::response::{Redirect, IntoResponse};
 
+    eprintln!("🔐 OAuth authorize_get called with client_id={}", params.client_id);
+
     // Check if user is authenticated
     let user_id: Option<String> = session.get("user_id")
         .await
@@ -287,8 +289,11 @@ pub async fn authorize_get(
             format!("Session error: {}", e)
         ))?;
 
+    eprintln!("🔐 OAuth authorize_get: user_id = {:?}", user_id);
+
     // If not authenticated, redirect to login with return URL
     if user_id.is_none() {
+        eprintln!("🔐 OAuth authorize_get: User not authenticated, storing params and redirecting to /");
         // Store OAuth params in session for after login
         session.insert("oauth_client_id", params.client_id)
             .await
@@ -334,6 +339,8 @@ pub async fn authorize_get(
     // User is authenticated - show consent page
     let user_id = user_id.unwrap();
 
+    eprintln!("🔐 OAuth authorize_get: User authenticated (user_id={}), generating code", user_id);
+
     // For now, auto-approve (later we can add a consent UI)
     // Generate authorization code
     let mut oauth_state = app_state.oauth_state.write().await;
@@ -354,6 +361,8 @@ pub async fn authorize_get(
         code,
         params.state
     );
+
+    eprintln!("🔐 OAuth authorize_get: Redirecting to callback: {}", redirect_url);
 
     Ok(Redirect::to(&redirect_url).into_response())
 }

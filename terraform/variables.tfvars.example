@@ -1,0 +1,27 @@
+# Copy this to variables.tfvars and fill in your values
+# DO NOT commit variables.tfvars to git (it's in .gitignore)
+
+do_token             = "your-digital-ocean-api-token"
+domain               = "loaa.yourdomain.com"
+ssh_key_fingerprint  = "your-ssh-key-fingerprint"
+
+# How to get these values:
+#
+# 1. Digital Ocean API Token:
+#    - Go to https://cloud.digitalocean.com/account/api/tokens
+#    - Click "Generate New Token"
+#    - Name it "Terraform"
+#    - Check "Write" scope
+#    - Copy the token
+#
+# 2. Domain:
+#    - Choose a subdomain from your Squarespace domains
+#    - Example: loaa.example.com
+#
+# 3. SSH Key Fingerprint:
+#    - Run: doctl compute ssh-key list
+#    - Or go to: https://cloud.digitalocean.com/account/security
+#    - Copy the fingerprint (looks like: ab:cd:ef:12:34:...)
+#    - If you don't have one, create it:
+#      ssh-keygen -t ed25519 -C "your_email@example.com"
+#      Then add to Digital Ocean via web interface

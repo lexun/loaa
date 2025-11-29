@@ -24,8 +24,10 @@ services:
       - RUST_LOG=info
 
     volumes:
-      # Persist database
-      - loaa-data:/app/data
+      # Persist database on Digital Ocean Volume
+      # In production: /mnt/loaa-data/surrealdb (persistent volume)
+      # In local dev: ./data (local directory)
+      - ${LOAA_DATA_DIR:-./data}:/app/data
 
     restart: unless-stopped
 
@@ -35,7 +37,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-volumes:
-  loaa-data:
-    driver: local

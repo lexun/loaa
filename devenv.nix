@@ -14,6 +14,7 @@
     just
     surrealdb
     lld
+    opentofu
   ];
 
   # Environment variables for all processes
