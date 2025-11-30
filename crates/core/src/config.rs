@@ -74,7 +74,7 @@ impl Config {
         let db_url = std::env::var("LOAA_DB_URL").ok();
         let db_path = std::env::var("LOAA_DB_PATH").ok().map(PathBuf::from);
 
-        let server_host = std::env::var("LOAA_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let server_host = std::env::var("LOAA_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
         let server_port = std::env::var("LOAA_PORT")
             .ok()
             .and_then(|s| s.parse().ok())
