@@ -1,4 +1,4 @@
-use surrealdb::opt::auth::Root;
+use surrealdb::opt::auth::{Root, Namespace};
 use surrealdb::Surreal;
 use surrealdb::engine::any::{self, Any};
 use crate::config::{DatabaseConfig, DatabaseMode};
@@ -51,16 +51,30 @@ impl Database {
                     .await
                     .map_err(|e| Error::Database(format!("Failed to authenticate with token: {}", e)))?;
             } else {
-                // Fall back to username/password authentication
-                let username = config.username.as_deref().unwrap_or("root");
-                let password = config.password.as_deref().unwrap_or("root");
+                // Namespace-level authentication
+                if let Some(namespace) = &config.namespace {
+                    let username = config.username.as_deref().unwrap_or("root");
+                    let password = config.password.as_deref().unwrap_or("root");
 
-                db.signin(Root {
-                    username,
-                    password,
-                })
-                .await
-                .map_err(|e| Error::Database(format!("Failed to authenticate: {}", e)))?;
+                    db.signin(Namespace {
+                        namespace,
+                        username,
+                        password,
+                    })
+                    .await
+                    .map_err(|e| Error::Database(format!("Failed to authenticate as namespace user: {}", e)))?;
+                } else {
+                    // Root-level authentication
+                    let username = config.username.as_deref().unwrap_or("root");
+                    let password = config.password.as_deref().unwrap_or("root");
+
+                    db.signin(Root {
+                        username,
+                        password,
+                    })
+                    .await
+                    .map_err(|e| Error::Database(format!("Failed to authenticate as root: {}", e)))?;
+                }
             }
         }
 
