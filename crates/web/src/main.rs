@@ -28,7 +28,7 @@ async fn main() {
     let config = Config::from_env();
 
     // Override server address from environment config
-    let addr = format!("{}:{}", config.server.host, config.server.port)
+    let addr: std::net::SocketAddr = format!("{}:{}", config.server.host, config.server.port)
         .parse()
         .expect("Invalid server address");
 
