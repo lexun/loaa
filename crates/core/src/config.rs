@@ -11,10 +11,18 @@ pub struct Config {
 pub struct DatabaseConfig {
     /// Database connection mode
     pub mode: DatabaseMode,
-    /// Database URL for remote mode (e.g., "127.0.0.1:8000")
+    /// Database URL for remote mode (e.g., "127.0.0.1:8000" or "wss://cloud.surrealdb.com")
     pub url: Option<String>,
     /// File path for embedded mode (e.g., "./data/loaa.db")
     pub path: Option<PathBuf>,
+    /// Namespace for remote mode
+    pub namespace: Option<String>,
+    /// Database name for remote mode
+    pub database: Option<String>,
+    /// Username for remote mode authentication
+    pub username: Option<String>,
+    /// Password for remote mode authentication
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -47,6 +55,10 @@ impl Default for Config {
                 mode: DatabaseMode::Memory,
                 url: Some("127.0.0.1:8000".to_string()),
                 path: None,
+                namespace: None,
+                database: None,
+                username: None,
+                password: None,
             },
             server: ServerConfig {
                 host: "127.0.0.1".to_string(),
@@ -73,6 +85,10 @@ impl Config {
 
         let db_url = std::env::var("LOAA_DB_URL").ok();
         let db_path = std::env::var("LOAA_DB_PATH").ok().map(PathBuf::from);
+        let db_namespace = std::env::var("LOAA_DB_NAMESPACE").ok();
+        let db_database = std::env::var("LOAA_DB_DATABASE").ok();
+        let db_username = std::env::var("LOAA_DB_USERNAME").ok();
+        let db_password = std::env::var("LOAA_DB_PASSWORD").ok();
 
         let server_host = std::env::var("LOAA_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
         let server_port = std::env::var("LOAA_PORT")
@@ -94,6 +110,10 @@ impl Config {
                 mode: db_mode,
                 url: db_url,
                 path: db_path,
+                namespace: db_namespace,
+                database: db_database,
+                username: db_username,
+                password: db_password,
             },
             server: ServerConfig {
                 host: server_host,
@@ -151,6 +171,10 @@ mod tests {
                 mode: DatabaseMode::Memory,
                 url: None,
                 path: None,
+                namespace: None,
+                database: None,
+                username: None,
+                password: None,
             },
             ..Default::default()
         };
@@ -164,6 +188,10 @@ mod tests {
                 mode: DatabaseMode::Embedded,
                 url: None,
                 path: None,
+                namespace: None,
+                database: None,
+                username: None,
+                password: None,
             },
             ..Default::default()
         };
@@ -177,6 +205,10 @@ mod tests {
                 mode: DatabaseMode::Remote,
                 url: None,
                 path: None,
+                namespace: None,
+                database: None,
+                username: None,
+                password: None,
             },
             ..Default::default()
         };

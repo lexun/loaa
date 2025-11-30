@@ -30,7 +30,12 @@ impl Database {
             DatabaseMode::Remote => {
                 let url = config.url.as_ref()
                     .ok_or_else(|| Error::Database("Remote mode requires database URL".to_string()))?;
-                format!("ws://{}", url)
+                // Support both ws:// and wss:// prefixes, or add ws:// if missing
+                if url.starts_with("ws://") || url.starts_with("wss://") {
+                    url.clone()
+                } else {
+                    format!("ws://{}", url)
+                }
             }
         };
 
@@ -38,18 +43,24 @@ impl Database {
             .await
             .map_err(|e| Error::Database(format!("Failed to connect to database: {}", e)))?;
 
-        // Sign in as root user for remote databases only
+        // Sign in for remote databases only
         if matches!(config.mode, DatabaseMode::Remote) {
+            let username = config.username.as_deref().unwrap_or("root");
+            let password = config.password.as_deref().unwrap_or("root");
+
             db.signin(Root {
-                username: "root",
-                password: "root",
+                username,
+                password,
             })
             .await
             .map_err(|e| Error::Database(format!("Failed to authenticate: {}", e)))?;
         }
 
         // Set namespace and database for all modes
-        db.use_ns("loaa").use_db("main").await
+        let namespace = config.namespace.as_deref().unwrap_or("loaa");
+        let database = config.database.as_deref().unwrap_or("main");
+
+        db.use_ns(namespace).use_db(database).await
             .map_err(|e| Error::Database(format!("Failed to set namespace/database: {}", e)))?;
 
         Ok(Self { client: Arc::new(db) })
@@ -61,6 +72,10 @@ impl Database {
             mode: DatabaseMode::Remote,
             url: Some(url.to_string()),
             path: None,
+            namespace: None,
+            database: None,
+            username: None,
+            password: None,
         };
         Self::init_with_config(&config).await
     }
