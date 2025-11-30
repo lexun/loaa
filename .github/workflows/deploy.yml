@@ -86,11 +86,27 @@ jobs:
             version: '3.8'
 
             services:
+              caddy:
+                image: caddy:2-alpine
+                container_name: caddy
+                ports:
+                  - "80:80"
+                  - "443:443"
+                  - "443:443/udp"
+                volumes:
+                  - ./Caddyfile:/etc/caddy/Caddyfile
+                  - caddy_data:/data
+                  - caddy_config:/config
+                restart: unless-stopped
+                depends_on:
+                  - loaa
+
               loaa:
                 image: ${IMAGE_TAG}
                 container_name: loaa-web
+                expose:
+                  - "3000"
                 ports:
-                  - "80:3000"
                   - "3001:3001"
                 environment:
                   - LOAA_DB_MODE=embedded
@@ -109,6 +125,25 @@ jobs:
                   timeout: 10s
                   retries: 3
                   start_period: 40s
+
+            volumes:
+              caddy_data:
+              caddy_config:
+            EOF
+
+            # Create Caddyfile
+            cat > Caddyfile << 'EOF'
+            loaa.barbuto.family {
+                reverse_proxy loaa:3000
+
+                # Enable HSTS
+                header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+                # Security headers
+                header X-Content-Type-Options "nosniff"
+                header X-Frame-Options "DENY"
+                header Referrer-Policy "strict-origin-when-cross-origin"
+            }
             EOF
 
             # Pull latest image
