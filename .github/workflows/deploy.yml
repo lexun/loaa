@@ -130,19 +130,17 @@ jobs:
           username: root
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
-            cd /opt/loaa
-
             # Wait for health check
             echo "Waiting for service to be healthy..."
             sleep 10
 
             # Check if container is running
-            if docker-compose ps | grep -q "Up"; then
+            if docker ps | grep -q "loaa-web.*Up"; then
               echo "✅ Deployment successful!"
-              docker-compose ps
+              docker ps --filter "name=loaa-web"
             else
               echo "❌ Deployment failed!"
-              docker-compose logs --tail=50
+              docker logs loaa-web --tail=50
               exit 1
             fi
 
