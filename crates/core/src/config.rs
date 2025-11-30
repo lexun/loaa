@@ -19,10 +19,12 @@ pub struct DatabaseConfig {
     pub namespace: Option<String>,
     /// Database name for remote mode
     pub database: Option<String>,
-    /// Username for remote mode authentication
+    /// Username for remote mode authentication (basic auth)
     pub username: Option<String>,
-    /// Password for remote mode authentication
+    /// Password for remote mode authentication (basic auth)
     pub password: Option<String>,
+    /// Token for remote mode authentication (JWT - used by SurrealDB Cloud)
+    pub token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -59,6 +61,7 @@ impl Default for Config {
                 database: None,
                 username: None,
                 password: None,
+                token: None,
             },
             server: ServerConfig {
                 host: "127.0.0.1".to_string(),
@@ -89,6 +92,7 @@ impl Config {
         let db_database = std::env::var("LOAA_DB_DATABASE").ok();
         let db_username = std::env::var("LOAA_DB_USERNAME").ok();
         let db_password = std::env::var("LOAA_DB_PASSWORD").ok();
+        let db_token = std::env::var("LOAA_DB_TOKEN").ok();
 
         let server_host = std::env::var("LOAA_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
         let server_port = std::env::var("LOAA_PORT")
@@ -114,6 +118,7 @@ impl Config {
                 database: db_database,
                 username: db_username,
                 password: db_password,
+                token: db_token,
             },
             server: ServerConfig {
                 host: server_host,
@@ -175,6 +180,7 @@ mod tests {
                 database: None,
                 username: None,
                 password: None,
+                token: None,
             },
             ..Default::default()
         };
@@ -192,6 +198,7 @@ mod tests {
                 database: None,
                 username: None,
                 password: None,
+                token: None,
             },
             ..Default::default()
         };
@@ -209,6 +216,7 @@ mod tests {
                 database: None,
                 username: None,
                 password: None,
+                token: None,
             },
             ..Default::default()
         };

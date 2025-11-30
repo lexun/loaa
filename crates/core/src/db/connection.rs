@@ -45,15 +45,23 @@ impl Database {
 
         // Sign in for remote databases only
         if matches!(config.mode, DatabaseMode::Remote) {
-            let username = config.username.as_deref().unwrap_or("root");
-            let password = config.password.as_deref().unwrap_or("root");
+            // Use token authentication if provided (for SurrealDB Cloud)
+            if let Some(token) = &config.token {
+                db.authenticate(token.clone())
+                    .await
+                    .map_err(|e| Error::Database(format!("Failed to authenticate with token: {}", e)))?;
+            } else {
+                // Fall back to username/password authentication
+                let username = config.username.as_deref().unwrap_or("root");
+                let password = config.password.as_deref().unwrap_or("root");
 
-            db.signin(Root {
-                username,
-                password,
-            })
-            .await
-            .map_err(|e| Error::Database(format!("Failed to authenticate: {}", e)))?;
+                db.signin(Root {
+                    username,
+                    password,
+                })
+                .await
+                .map_err(|e| Error::Database(format!("Failed to authenticate: {}", e)))?;
+            }
         }
 
         // Set namespace and database for all modes
@@ -76,6 +84,7 @@ impl Database {
             database: None,
             username: None,
             password: None,
+            token: None,
         };
         Self::init_with_config(&config).await
     }
