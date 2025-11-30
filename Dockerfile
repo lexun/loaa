@@ -102,6 +102,8 @@ ENV LOAA_DB_MODE=embedded
 ENV LOAA_DB_PATH=/app/data/loaa.db
 ENV LOAA_INCLUDE_MCP=true
 ENV LOAA_MCP_PORT=3001
+ENV LOAA_STYLE_DIR=/app/style
+ENV LOAA_PKG_DIR=/app/site/pkg
 ENV RUST_LOG=info
 
 # Default command: run web server in all-in-one mode

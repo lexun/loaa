@@ -91,9 +91,13 @@ async fn main() {
         // OAuth flow endpoints
         .route("/oauth/authorize", get(authorize_get))
         .route("/oauth/token", post(token_post))
-        // Static files
-        .nest_service("/style", ServeDir::new("crates/web/style"))
-        .nest_service("/pkg", ServeDir::new("target/site/pkg"))
+        // Static files - use environment variables or defaults
+        .nest_service("/style", ServeDir::new(
+            std::env::var("LOAA_STYLE_DIR").unwrap_or_else(|_| "crates/web/style".to_string())
+        ))
+        .nest_service("/pkg", ServeDir::new(
+            std::env::var("LOAA_PKG_DIR").unwrap_or_else(|_| "target/site/pkg".to_string())
+        ))
         // Leptos routes
         .leptos_routes(&app_state, routes, {
             let leptos_options = leptos_options.clone();
