@@ -7,6 +7,7 @@
 }:
 
 {
+
   languages.rust.enable = true;
 
   packages = with pkgs; [
@@ -23,6 +24,8 @@
     LOAA_DB_MODE = "embedded";
     LOAA_DB_PATH = "./data/loaa.db";  # Relative to project root
   };
+
+  dotenv.disableHint = true;
 
   # Process orchestration with process-compose
   # Run `devenv up` to start all services
