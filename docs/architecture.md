@@ -69,8 +69,7 @@ loaa/
 │   ├── core/           # Domain models, business logic
 │   ├── web/            # Leptos web application
 │   └── mcp/            # MCP server
-├── docs/               # Design documentation
-└── .beads/             # Issue tracking
+└── docs/               # Design documentation
 ```
 
 ### Workspace Organization

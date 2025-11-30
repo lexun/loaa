@@ -63,15 +63,14 @@ Loa'a is a chore and rewards tracking system that helps kids stay motivated thro
 
 **Discovering Improvements:**
 - If you notice something that should be cleaned up or refactored while working on an issue:
-  1. Create a new beads issue for the improvement
-  2. Link it with `discovered-from` dependency to the current issue
-  3. Continue with your current work
-  4. Address the improvement in a separate issue later
+  1. Create a new issue for the improvement
+  2. Continue with your current work
+  3. Address the improvement in a separate issue later
 
 **Substantial Refactoring:**
 - If you realize a substantial refactor would greatly simplify your current work:
   1. **Stash your current changes** (or commit to a WIP branch)
-  2. **Create a new beads issue** for the refactoring work
+  2. **Create a new issue** for the refactoring work
   3. **Complete the refactoring** - implement, test, commit, and close the issue
   4. **Return to original work** - you may need to start over, but the codebase is now cleaner
   5. The refactoring makes the original work easier and more correct
@@ -82,18 +81,6 @@ Loa'a is a chore and rewards tracking system that helps kids stay motivated thro
 - Makes future work easier
 - Ensures each commit is meaningful and correct
 - Maintains architectural integrity
-
-**Example Workflow:**
-```bash
-# Working on loaa-123, discover need for refactor
-git stash
-bd create "Refactor database connection handling" -p 1 --deps discovered-from:loaa-123
-bd update loaa-456 --status in_progress
-# ... do refactoring ...
-bd close loaa-456 --reason "Completed refactoring"
-git stash pop  # or start fresh if needed
-# Continue with loaa-123
-```
 
 ### What NOT to Build (Yet)
 
@@ -197,11 +184,6 @@ Create new issues when you:
 - Find missing functionality needed for current task
 - Identify technical debt that should be addressed
 
-Link new issues to their parent:
-```bash
-bd create "Fix validation bug" -p 1 --deps discovered-from:loaa-ycs
-```
-
 ### Pivot Points
 
 Be aware of places where we might change direction:
@@ -222,7 +204,6 @@ Be aware of places where we might change direction:
 
 **Resources:**
 - Check existing docs in `docs/`
-- Review related beads issues
 - Consult architecture docs for technical decisions
 - Look at Leptos book: https://book.leptos.dev/
 - SurrealDB docs: https://surrealdb.com/docs
@@ -231,94 +212,6 @@ Be aware of places where we might change direction:
 - When in doubt about scope, check roadmap
 - When uncertain about design, check architecture docs
 - When unclear about priorities, check issue priorities
-
-## Issue Tracking with bd (beads)
-
-**IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or other tracking methods.
-
-### Why bd?
-
-- Dependency-aware: Track blockers and relationships between issues
-- Git-friendly: Auto-syncs to JSONL for version control
-- Agent-optimized: JSON output, ready work detection, discovered-from links
-- Prevents duplicate tracking systems and confusion
-
-### Quick Start
-
-**Check for ready work:**
-```bash
-bd ready --json
-```
-
-**Create new issues:**
-```bash
-bd create "Issue title" -t bug|feature|task -p 0-4 --json
-bd create "Issue title" -p 1 --deps discovered-from:loaa-123 --json
-```
-
-**Claim and update:**
-```bash
-bd update loaa-42 --status in_progress --json
-bd update loaa-42 --priority 1 --json
-```
-
-**Complete work:**
-```bash
-bd close loaa-42 --reason "Completed" --json
-```
-
-### Issue Types
-
-- `bug` - Something broken
-- `feature` - New functionality
-- `task` - Work item (tests, docs, refactoring)
-- `epic` - Large feature with subtasks
-- `chore` - Maintenance (dependencies, tooling)
-
-### Priorities
-
-- `0` - Critical (security, data loss, broken builds)
-- `1` - High (major features, important bugs)
-- `2` - Medium (default, nice-to-have)
-- `3` - Low (polish, optimization)
-- `4` - Backlog (future ideas)
-
-### Workflow for AI Agents
-
-1. **Check ready work**: `bd ready` shows unblocked issues
-2. **Claim your task**: `bd update <id> --status in_progress`
-3. **Work on it**: Implement, test, document
-4. **Discover new work?** Create linked issue:
-   - `bd create "Found bug" -p 1 --deps discovered-from:<parent-id>`
-5. **Complete**: `bd close <id> --reason "Done"`
-6. **Commit together**: Always commit the `.beads/issues.jsonl` file together with the code changes so issue state stays in sync with code state
-
-### Auto-Sync
-
-bd automatically syncs with git:
-- Exports to `.beads/beads.jsonl` after changes (5s debounce)
-- Imports from JSONL when newer (e.g., after `git pull`)
-- No manual export/import needed!
-
-### MCP Server (Recommended)
-
-If using Claude or MCP-compatible clients, install the beads MCP server:
-
-```bash
-pip install beads-mcp
-```
-
-Add to MCP config (e.g., `~/.config/claude/config.json`):
-```json
-{
-  "beads": {
-    "command": "beads-mcp",
-    "args": []
-  }
-}
-```
-
-Then use `mcp__beads__*` functions instead of CLI commands.
 
 ### Managing AI-Generated Planning Documents
 
@@ -347,17 +240,3 @@ history/
 - ✅ Easy to exclude from version control if desired
 - ✅ Preserves planning history for archeological research
 - ✅ Reduces noise when browsing the project
-
-### Important Rules
-
-- ✅ Use bd for ALL task tracking
-- ✅ Always use `--json` flag for programmatic use
-- ✅ Link discovered work with `discovered-from` dependencies
-- ✅ Check `bd ready` before asking "what should I work on?"
-- ✅ Store AI planning docs in `history/` directory
-- ❌ Do NOT create markdown TODO lists
-- ❌ Do NOT use external issue trackers
-- ❌ Do NOT duplicate tracking systems
-- ❌ Do NOT clutter repo root with planning documents
-
-For more details, see README.md and QUICKSTART.md.

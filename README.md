@@ -63,23 +63,10 @@ loaa/
 │   ├── core/       # Domain models and business logic
 │   ├── web/        # Leptos web application
 │   └── mcp/        # MCP server for AI integration
-├── docs/           # Design decisions and documentation
-└── .beads/         # Issue tracking (uses bd/beads)
+└── docs/           # Design decisions and documentation
 ```
 
-## Issue Tracking
-
-This project uses [bd (beads)](https://github.com/steveyegge/beads) for issue tracking.
-
-```bash
-# See what needs to be done
-bd ready
-
-# View all issues
-bd list
-```
-
-See [AGENTS.md](AGENTS.md) for complete workflow details.
+See [AGENTS.md](AGENTS.md) for development workflow details.
 
 ## License
 

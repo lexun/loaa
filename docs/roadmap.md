@@ -342,7 +342,7 @@ We'll know this is working if:
 - Work on one phase at a time
 - Each phase should be mergeable to main
 - Write docs as we go (capture learnings)
-- Update beads issues when scope changes
+- Update issues when scope changes
 - Commit frequently with clear messages
 - No feature branches until multi-user (Phase 2)
 

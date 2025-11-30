@@ -10,7 +10,6 @@ target/
 .envrc
 .env
 *.log
-.beads/
 
 # Git
 .git/
