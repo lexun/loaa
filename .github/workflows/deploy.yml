@@ -90,7 +90,7 @@ jobs:
                 image: ${IMAGE_TAG}
                 container_name: loaa-web
                 ports:
-                  - "3000:3000"
+                  - "80:3000"
                   - "3001:3001"
                 environment:
                   - LOAA_DB_MODE=embedded
