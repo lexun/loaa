@@ -13,6 +13,7 @@ services:
       - LOAA_DB_PATH=/app/data/loaa.db
 
       # Server configuration
+      - LOAA_HOST=0.0.0.0
       - LOAA_INCLUDE_MCP=true
       - LOAA_MCP_PORT=3001
 
