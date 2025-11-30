@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   loaa:
-    build: .
+    image: ${IMAGE_NAME:-ghcr.io/lexun/loaa}:${IMAGE_TAG:-latest}
+    pull_policy: always
     ports:
       - "3000:3000"  # Web UI and OAuth endpoints
       - "3001:3001"  # MCP server (for Claude integration)
