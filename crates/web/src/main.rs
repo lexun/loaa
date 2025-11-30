@@ -23,7 +23,15 @@ async fn main() {
 
     let conf = get_configuration(None).await.unwrap();
     let leptos_options = conf.leptos_options;
-    let addr = leptos_options.site_addr;
+
+    // Load configuration from environment
+    let config = Config::from_env();
+
+    // Override server address from environment config
+    let addr = format!("{}:{}", config.server.host, config.server.port)
+        .parse()
+        .expect("Invalid server address");
+
     let routes = generate_route_list(App);
 
     // Set up session store with memory backend
@@ -44,9 +52,6 @@ async fn main() {
     });
 
     println!("🔐 OAuth base URL: {}", base_url);
-
-    // Check if we should include MCP server
-    let config = Config::from_env();
     let include_mcp = config.server.include_mcp;
 
     if include_mcp {
