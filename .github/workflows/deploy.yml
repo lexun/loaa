@@ -109,15 +109,11 @@ jobs:
                 ports:
                   - "3001:3001"
                 environment:
-                  - LOAA_DB_MODE=embedded
-                  - LOAA_DB_PATH=/app/data/loaa.db
                   - LOAA_HOST=0.0.0.0
                   - LOAA_INCLUDE_MCP=true
                   - LOAA_MCP_PORT=3001
                 env_file:
                   - .env
-                volumes:
-                  - ${LOAA_DATA_DIR:-./data}:/app/data
                 restart: unless-stopped
                 healthcheck:
                   test: ["CMD", "curl", "-f", "http://localhost:3000/"]
