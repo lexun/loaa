@@ -33,15 +33,6 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# Create persistent volume for database storage
-resource "digitalocean_volume" "loaa_data" {
-  region                  = "sfo3"
-  name                    = "loaa-data"
-  size                    = 10  # 10GB - $1/month
-  initial_filesystem_type = "ext4"
-  description             = "Persistent storage for Loaa database"
-}
-
 # Create a new droplet
 resource "digitalocean_droplet" "loaa" {
   image    = "docker-20-04"  # Ubuntu 20.04 with Docker pre-installed
@@ -68,26 +59,6 @@ resource "digitalocean_droplet" "loaa" {
     # Create app directory
     mkdir -p /opt/loaa
 
-    # Wait for volume to be attached and mount it
-    while [ ! -e /dev/disk/by-id/scsi-0DO_Volume_loaa-data ]; do
-      echo "Waiting for volume to be attached..."
-      sleep 5
-    done
-
-    # Create mount point for data volume
-    mkdir -p /mnt/loaa-data
-
-    # Add to fstab for automatic mounting on reboot
-    if ! grep -q "/mnt/loaa-data" /etc/fstab; then
-      echo '/dev/disk/by-id/scsi-0DO_Volume_loaa-data /mnt/loaa-data ext4 defaults,nofail,discard 0 0' >> /etc/fstab
-    fi
-
-    # Mount the volume
-    mount -a
-
-    # Create data directory for SurrealDB
-    mkdir -p /mnt/loaa-data/surrealdb
-
     # Set up firewall
     ufw allow 22/tcp    # SSH
     ufw allow 80/tcp    # HTTP
@@ -100,17 +71,10 @@ resource "digitalocean_droplet" "loaa" {
     echo "LOAA_BASE_URL=https://${var.domain}" >> /opt/loaa/.env
     echo "LOAA_INCLUDE_MCP=true" >> /opt/loaa/.env
     echo "LOAA_MCP_PORT=3001" >> /opt/loaa/.env
-    echo "LOAA_DATA_DIR=/mnt/loaa-data/surrealdb" >> /opt/loaa/.env
     echo "LOAA_ADMIN_PASSWORD=${var.admin_password}" >> /opt/loaa/.env
   EOF
 
   tags = ["loaa", "production"]
-}
-
-# Attach the volume to the droplet
-resource "digitalocean_volume_attachment" "loaa_data" {
-  droplet_id = digitalocean_droplet.loaa.id
-  volume_id  = digitalocean_volume.loaa_data.id
 }
 
 # Firewall
@@ -167,11 +131,6 @@ output "droplet_ip" {
   description = "The public IP address of the droplet"
 }
 
-output "volume_id" {
-  value       = digitalocean_volume.loaa_data.id
-  description = "The ID of the persistent data volume"
-}
-
 output "dns_instructions" {
   value = <<-EOT
     Add these DNS records in Squarespace:
@@ -196,13 +155,12 @@ output "infrastructure_summary" {
 
     Storage:
     - Droplet disk: 25GB (ephemeral)
-    - Persistent volume: 10GB (mounted at /mnt/loaa-data)
-    - Database location: /mnt/loaa-data/surrealdb
+    - Database: SurrealDB Cloud (wss://lexun-06dddvr74druj5v1jmbhaoqo8g.aws-usw2.surreal.cloud)
+    - Namespace: loaa
 
-    Monthly cost: $7/month ($6 droplet + $1 volume)
+    Monthly cost: $6/month (droplet only)
 
-    Your database is now stored on the persistent volume and will
-    survive droplet rebuilds, resizes, and snapshots.
+    Your database is hosted on SurrealDB Cloud with namespace-level isolation.
   EOT
   description = "Summary of provisioned infrastructure"
 }
