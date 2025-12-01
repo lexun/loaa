@@ -16,6 +16,7 @@ async fn main() {
     };
     use loaa_core::config::Config;
     use tower_http::services::ServeDir;
+    use tower_http::cors::CorsLayer;
     use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
     use tower_sessions::cookie::time::Duration;
     use std::sync::Arc;
@@ -77,9 +78,28 @@ async fn main() {
         jwt_secret,
     };
 
+    // Configure CORS for OAuth endpoints
+    // Allow requests from Claude Desktop (claude.ai and claude.com domains)
+    let cors = CorsLayer::new()
+        .allow_origin([
+            "https://claude.ai".parse().unwrap(),
+            "https://claude.com".parse().unwrap(),
+        ])
+        .allow_methods([axum::http::Method::GET, axum::http::Method::POST, axum::http::Method::OPTIONS])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+            axum::http::HeaderName::from_static("mcp-session-id"),
+        ])
+        .expose_headers([
+            axum::http::HeaderName::from_static("mcp-session-id"),
+            axum::http::HeaderName::from_static("x-request-id"),
+        ])
+        .allow_credentials(true);
+
     // Serve static files BEFORE leptos routes so they take precedence
     let app = Router::new()
-        // OAuth discovery endpoints
+        // OAuth discovery endpoints (with CORS)
         .route(
             "/.well-known/oauth-authorization-server",
             get(get_authorization_server_metadata),
@@ -88,9 +108,15 @@ async fn main() {
             "/.well-known/oauth-protected-resource",
             get(get_protected_resource_metadata),
         )
-        // OAuth flow endpoints
+        // Path-based protected resource metadata for MCP at /mcp
+        .route(
+            "/.well-known/oauth-protected-resource/public/mcp",
+            get(get_protected_resource_metadata),
+        )
+        // OAuth flow endpoints (with CORS)
         .route("/oauth/authorize", get(authorize_get))
         .route("/oauth/token", post(token_post))
+        .layer(cors)
         // Static files - use environment variables or defaults
         .nest_service("/style", ServeDir::new(
             std::env::var("LOAA_STYLE_DIR").unwrap_or_else(|_| "crates/web/style".to_string())
