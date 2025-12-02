@@ -1,7 +1,7 @@
 /// MCP server integration for all-in-one deployment mode
 /// This module allows the web server to optionally run the MCP server in the same process
 
-use axum::{Router, middleware};
+use axum::{Router, middleware, response::IntoResponse};
 use loaa_core::config::Config;
 use std::net::SocketAddr;
 use anyhow::Result;
@@ -65,11 +65,26 @@ pub async fn start_mcp_server(config: Config, jwt_secret: String, base_url: Stri
     Ok(())
 }
 
-/// JWT validation middleware (copied from loaa-mcp/src/auth.rs)
+/// Helper to create a 401 response with WWW-Authenticate header (RFC9728)
+fn unauthorized_response(base_url: &str, message: &str) -> axum::response::Response {
+    use axum::http::{StatusCode, header};
+
+    let mut response = (StatusCode::UNAUTHORIZED, message.to_string()).into_response();
+    response.headers_mut().insert(
+        header::WWW_AUTHENTICATE,
+        axum::http::HeaderValue::from_str(&format!(
+            "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource\", scope=\"mcp:tools:read mcp:tools:write\"",
+            base_url
+        )).unwrap()
+    );
+    response
+}
+
+/// JWT validation middleware with WWW-Authenticate header support
 async fn validate_jwt_middleware(
     req: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
-) -> Result<axum::response::Response, axum::http::StatusCode> {
+) -> axum::response::Response {
     use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
     use serde::{Deserialize, Serialize};
 
@@ -83,43 +98,49 @@ async fn validate_jwt_middleware(
         scope: String,
     }
 
+    // Get base URL for WWW-Authenticate header
+    let base_url = std::env::var("LOAA_BASE_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
+
     // Extract Authorization header
     let auth_header = req.headers()
         .get("Authorization")
-        .and_then(|h| h.to_str().ok())
-        .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+        .and_then(|h| h.to_str().ok());
+
+    if auth_header.is_none() {
+        return unauthorized_response(&base_url, "Unauthorized: No Authorization header");
+    }
 
     // Check Bearer scheme
-    let token = auth_header
-        .strip_prefix("Bearer ")
-        .ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
+    let token = match auth_header.unwrap().strip_prefix("Bearer ") {
+        Some(t) => t,
+        None => return unauthorized_response(&base_url, "Unauthorized: Bearer token required"),
+    };
 
     // Get JWT secret from environment
-    let jwt_secret = std::env::var("LOAA_JWT_SECRET")
-        .map_err(|_| {
+    let jwt_secret = match std::env::var("LOAA_JWT_SECRET") {
+        Ok(s) => s,
+        Err(_) => {
             eprintln!("ERROR: LOAA_JWT_SECRET not set");
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    // Get expected issuer from environment
-    let expected_issuer = std::env::var("LOAA_BASE_URL")
-        .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string()).into_response();
+        }
+    };
 
     // Create validation settings
     let mut validation = Validation::new(Algorithm::HS256);
-    validation.set_issuer(&[expected_issuer]);
+    validation.set_issuer(&[base_url.clone()]);
     validation.set_audience(&["loaa-mcp"]);
 
     // Validate JWT
-    decode::<Claims>(
+    match decode::<Claims>(
         token,
         &DecodingKey::from_secret(jwt_secret.as_ref()),
         &validation
-    ).map_err(|e| {
-        eprintln!("JWT validation failed: {}", e);
-        axum::http::StatusCode::UNAUTHORIZED
-    })?;
-
-    // Token is valid, proceed
-    Ok(next.run(req).await)
+    ) {
+        Ok(_) => next.run(req).await,
+        Err(e) => {
+            eprintln!("JWT validation failed: {}", e);
+            unauthorized_response(&base_url, &format!("Unauthorized: {}", e))
+        }
+    }
 }
