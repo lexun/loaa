@@ -24,11 +24,25 @@ pub struct Claims {
     pub scope: String,
 }
 
+/// Helper to create a 401 response with WWW-Authenticate header
+fn unauthorized_response(base_url: &str, message: &str) -> Response {
+    let mut response = Response::new(Body::from(message.to_string()));
+    *response.status_mut() = StatusCode::UNAUTHORIZED;
+    response.headers_mut().insert(
+        axum::http::header::WWW_AUTHENTICATE,
+        axum::http::HeaderValue::from_str(&format!(
+            "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource\", scope=\"mcp:tools:read mcp:tools:write\"",
+            base_url
+        )).unwrap()
+    );
+    response
+}
+
 /// JWT validation middleware for MCP HTTP endpoints
 pub async fn validate_jwt(
     req: Request<Body>,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Response {
     // Get base URL for WWW-Authenticate header
     let base_url = std::env::var("LOAA_BASE_URL")
         .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
@@ -40,43 +54,27 @@ pub async fn validate_jwt(
 
     // If no Authorization header, return 401 with WWW-Authenticate header
     if auth_header.is_none() {
-        let mut response = Response::new(Body::from("Unauthorized"));
-        *response.status_mut() = StatusCode::UNAUTHORIZED;
-        response.headers_mut().insert(
-            axum::http::header::WWW_AUTHENTICATE,
-            axum::http::HeaderValue::from_str(&format!(
-                "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource\", scope=\"mcp:tools:read mcp:tools:write\"",
-                base_url
-            )).unwrap()
-        );
-        return Err(StatusCode::UNAUTHORIZED);
+        return unauthorized_response(&base_url, "Unauthorized: No Authorization header");
     }
 
     // Check Bearer scheme
-    let token = auth_header.unwrap()
-        .strip_prefix("Bearer ");
-
-    if token.is_none() {
-        let mut response = Response::new(Body::from("Unauthorized: Bearer token required"));
-        *response.status_mut() = StatusCode::UNAUTHORIZED;
-        response.headers_mut().insert(
-            axum::http::header::WWW_AUTHENTICATE,
-            axum::http::HeaderValue::from_str(&format!(
-                "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource\", scope=\"mcp:tools:read mcp:tools:write\"",
-                base_url
-            )).unwrap()
-        );
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
-    let token = token.unwrap();
+    let token = match auth_header.unwrap().strip_prefix("Bearer ") {
+        Some(t) => t,
+        None => {
+            return unauthorized_response(&base_url, "Unauthorized: Bearer token required");
+        }
+    };
 
     // Get JWT secret from environment
-    let jwt_secret = std::env::var("LOAA_JWT_SECRET")
-        .map_err(|_| {
+    let jwt_secret = match std::env::var("LOAA_JWT_SECRET") {
+        Ok(s) => s,
+        Err(_) => {
             eprintln!("ERROR: LOAA_JWT_SECRET not set");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+            let mut response = Response::new(Body::from("Internal server error"));
+            *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            return response;
+        }
+    };
 
     // Create validation settings
     let mut validation = Validation::new(Algorithm::HS256);
@@ -84,26 +82,18 @@ pub async fn validate_jwt(
     validation.set_audience(&["loaa-mcp"]);
 
     // Validate JWT
-    let result = decode::<Claims>(
+    match decode::<Claims>(
         token,
         &DecodingKey::from_secret(jwt_secret.as_ref()),
         &validation
-    );
-
-    if let Err(e) = result {
-        eprintln!("JWT validation failed: {}", e);
-        let mut response = Response::new(Body::from(format!("Unauthorized: {}", e)));
-        *response.status_mut() = StatusCode::UNAUTHORIZED;
-        response.headers_mut().insert(
-            axum::http::header::WWW_AUTHENTICATE,
-            axum::http::HeaderValue::from_str(&format!(
-                "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource\", scope=\"mcp:tools:read mcp:tools:write\"",
-                base_url
-            )).unwrap()
-        );
-        return Err(StatusCode::UNAUTHORIZED);
+    ) {
+        Ok(_) => {
+            // Token is valid, proceed with request
+            next.run(req).await
+        }
+        Err(e) => {
+            eprintln!("JWT validation failed: {}", e);
+            unauthorized_response(&base_url, &format!("Unauthorized: {}", e))
+        }
     }
-
-    // Token is valid, proceed with request
-    Ok(next.run(req).await)
 }
