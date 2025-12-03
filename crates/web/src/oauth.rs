@@ -18,10 +18,52 @@ pub struct AuthorizationServerMetadata {
     pub issuer: String,
     pub authorization_endpoint: String,
     pub token_endpoint: String,
+    pub registration_endpoint: String,
     pub code_challenge_methods_supported: Vec<String>,
     pub grant_types_supported: Vec<String>,
     pub response_types_supported: Vec<String>,
     pub scopes_supported: Vec<String>,
+}
+
+/// Dynamic Client Registration request (RFC 7591)
+#[derive(Debug, Deserialize)]
+pub struct ClientRegistrationRequest {
+    pub redirect_uris: Vec<String>,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    #[serde(default)]
+    pub token_endpoint_auth_method: Option<String>,
+    #[serde(default)]
+    pub grant_types: Option<Vec<String>>,
+    #[serde(default)]
+    pub response_types: Option<Vec<String>>,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+/// Dynamic Client Registration response (RFC 7591)
+#[derive(Debug, Serialize)]
+pub struct ClientRegistrationResponse {
+    pub client_id: String,
+    pub client_secret: Option<String>,
+    pub client_id_issued_at: i64,
+    pub client_secret_expires_at: i64,
+    pub redirect_uris: Vec<String>,
+    pub client_name: Option<String>,
+    pub token_endpoint_auth_method: String,
+    pub grant_types: Vec<String>,
+    pub response_types: Vec<String>,
+    pub scope: String,
+}
+
+/// Registered OAuth client
+#[derive(Clone)]
+pub struct RegisteredClient {
+    pub client_id: String,
+    pub client_secret: Option<String>,
+    pub redirect_uris: Vec<String>,
+    pub client_name: Option<String>,
+    pub created_at: DateTime<Utc>,
 }
 
 /// OAuth Protected Resource Metadata (for MCP discovery)
@@ -93,16 +135,36 @@ pub struct AuthorizationCode {
     pub expires_at: DateTime<Utc>,
 }
 
-/// OAuth state storage (only authorization codes - tokens are stateless JWTs)
+/// OAuth state storage (authorization codes and registered clients)
 pub struct OAuthState {
     pub codes: HashMap<String, AuthorizationCode>,
+    pub clients: HashMap<String, RegisteredClient>,
 }
 
 impl OAuthState {
     pub fn new() -> Self {
         Self {
             codes: HashMap::new(),
+            clients: HashMap::new(),
         }
+    }
+
+    /// Register a new OAuth client (Dynamic Client Registration)
+    pub fn register_client(&mut self, request: &ClientRegistrationRequest) -> RegisteredClient {
+        let client_id = Uuid::new_v4().to_string();
+        // For public clients (like Claude), no secret is needed with PKCE
+        let client_secret = None;
+
+        let client = RegisteredClient {
+            client_id: client_id.clone(),
+            client_secret,
+            redirect_uris: request.redirect_uris.clone(),
+            client_name: request.client_name.clone(),
+            created_at: Utc::now(),
+        };
+
+        self.clients.insert(client_id, client.clone());
+        client
     }
 
     /// Generate a new authorization code
@@ -253,6 +315,7 @@ pub async fn get_authorization_server_metadata(
         issuer: app_state.base_url.clone(),
         authorization_endpoint: format!("{}/oauth/authorize", app_state.base_url),
         token_endpoint: format!("{}/oauth/token", app_state.base_url),
+        registration_endpoint: format!("{}/oauth/register", app_state.base_url),
         code_challenge_methods_supported: vec!["S256".to_string()],
         grant_types_supported: vec!["authorization_code".to_string()],
         response_types_supported: vec!["code".to_string()],
@@ -402,5 +465,46 @@ pub async fn token_post(
         token_type: "Bearer".to_string(),
         expires_in,
         refresh_token: None, // We don't support refresh tokens yet
+    }))
+}
+
+/// OAuth Dynamic Client Registration endpoint (POST)
+/// This allows clients like Claude to register themselves automatically (RFC 7591)
+pub async fn register_client_post(
+    State(app_state): State<AppState>,
+    Json(request): Json<ClientRegistrationRequest>,
+) -> axum::response::Result<Json<ClientRegistrationResponse>> {
+    eprintln!("🔐 OAuth register_client called with redirect_uris={:?}, client_name={:?}",
+        request.redirect_uris, request.client_name);
+
+    // Validate redirect URIs
+    if request.redirect_uris.is_empty() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "At least one redirect_uri is required".to_string(),
+        ).into());
+    }
+
+    // Register the client
+    let mut oauth_state = app_state.oauth_state.write().await;
+    let client = oauth_state.register_client(&request);
+    drop(oauth_state);
+
+    let now = Utc::now().timestamp();
+
+    eprintln!("🔐 OAuth register_client: Registered client_id={}", client.client_id);
+
+    // Return registration response
+    Ok(Json(ClientRegistrationResponse {
+        client_id: client.client_id,
+        client_secret: client.client_secret,
+        client_id_issued_at: now,
+        client_secret_expires_at: 0, // Never expires for public clients
+        redirect_uris: client.redirect_uris,
+        client_name: client.client_name,
+        token_endpoint_auth_method: "none".to_string(), // Public client with PKCE
+        grant_types: vec!["authorization_code".to_string()],
+        response_types: vec!["code".to_string()],
+        scope: "mcp:tools:read mcp:tools:write".to_string(),
     }))
 }

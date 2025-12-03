@@ -11,6 +11,7 @@ async fn main() {
         get_protected_resource_metadata,
         authorize_get,
         token_post,
+        register_client_post,
         OAuthState,
         AppState,
     };
@@ -116,6 +117,7 @@ async fn main() {
         // OAuth flow endpoints (with CORS)
         .route("/oauth/authorize", get(authorize_get))
         .route("/oauth/token", post(token_post))
+        .route("/oauth/register", post(register_client_post))
         .layer(cors)
         // Static files - use environment variables or defaults
         .nest_service("/style", ServeDir::new(
