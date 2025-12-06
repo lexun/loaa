@@ -432,12 +432,17 @@ pub async fn authorize_get(
 
 /// OAuth token endpoint (POST)
 /// This exchanges the authorization code for a JWT access token
+/// Accepts both form-encoded and JSON request bodies
 pub async fn token_post(
     State(app_state): State<AppState>,
     axum::Form(params): axum::Form<TokenParams>,
 ) -> axum::response::Result<Json<TokenResponse>> {
+    eprintln!("🔐 OAuth token_post called with grant_type={}, client_id={}",
+        params.grant_type, params.client_id);
+
     // Validate grant_type
     if params.grant_type != "authorization_code" {
+        eprintln!("🔐 OAuth token_post: Invalid grant_type: {}", params.grant_type);
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
             "Unsupported grant_type. Only 'authorization_code' is supported.".to_string(),
@@ -446,18 +451,74 @@ pub async fn token_post(
 
     // Exchange authorization code for JWT access token
     let mut oauth_state = app_state.oauth_state.write().await;
-    let (jwt_token, expires_in) = oauth_state.exchange_code(
+    let result = oauth_state.exchange_code(
         &params.code,
         &params.client_id,
         &params.code_verifier,
         &params.redirect_uri,
         &app_state.jwt_secret,
         &app_state.base_url,
-    ).map_err(|e| (
-        axum::http::StatusCode::BAD_REQUEST,
-        format!("Token exchange failed: {}", e),
-    ))?;
+    );
     drop(oauth_state);
+
+    let (jwt_token, expires_in) = result.map_err(|e| {
+        eprintln!("🔐 OAuth token_post: Exchange failed: {}", e);
+        (
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Token exchange failed: {}", e),
+        )
+    })?;
+
+    eprintln!("🔐 OAuth token_post: Success! Token issued for client_id={}", params.client_id);
+
+    // Return token response
+    Ok(Json(TokenResponse {
+        access_token: jwt_token,
+        token_type: "Bearer".to_string(),
+        expires_in,
+        refresh_token: None, // We don't support refresh tokens yet
+    }))
+}
+
+/// OAuth token endpoint (POST) - JSON variant
+/// Some clients send JSON instead of form-encoded data
+pub async fn token_post_json(
+    State(app_state): State<AppState>,
+    Json(params): Json<TokenParams>,
+) -> axum::response::Result<Json<TokenResponse>> {
+    eprintln!("🔐 OAuth token_post_json called with grant_type={}, client_id={}",
+        params.grant_type, params.client_id);
+
+    // Validate grant_type
+    if params.grant_type != "authorization_code" {
+        eprintln!("🔐 OAuth token_post_json: Invalid grant_type: {}", params.grant_type);
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "Unsupported grant_type. Only 'authorization_code' is supported.".to_string(),
+        ).into());
+    }
+
+    // Exchange authorization code for JWT access token
+    let mut oauth_state = app_state.oauth_state.write().await;
+    let result = oauth_state.exchange_code(
+        &params.code,
+        &params.client_id,
+        &params.code_verifier,
+        &params.redirect_uri,
+        &app_state.jwt_secret,
+        &app_state.base_url,
+    );
+    drop(oauth_state);
+
+    let (jwt_token, expires_in) = result.map_err(|e| {
+        eprintln!("🔐 OAuth token_post_json: Exchange failed: {}", e);
+        (
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Token exchange failed: {}", e),
+        )
+    })?;
+
+    eprintln!("🔐 OAuth token_post_json: Success! Token issued for client_id={}", params.client_id);
 
     // Return token response
     Ok(Json(TokenResponse {
