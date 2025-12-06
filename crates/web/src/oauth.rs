@@ -19,6 +19,7 @@ pub struct AuthorizationServerMetadata {
     pub authorization_endpoint: String,
     pub token_endpoint: String,
     pub registration_endpoint: String,
+    pub token_endpoint_auth_methods_supported: Vec<String>,
     pub code_challenge_methods_supported: Vec<String>,
     pub grant_types_supported: Vec<String>,
     pub response_types_supported: Vec<String>,
@@ -316,6 +317,8 @@ pub async fn get_authorization_server_metadata(
         authorization_endpoint: format!("{}/oauth/authorize", app_state.base_url),
         token_endpoint: format!("{}/oauth/token", app_state.base_url),
         registration_endpoint: format!("{}/oauth/register", app_state.base_url),
+        // "none" for public clients using PKCE (no client_secret)
+        token_endpoint_auth_methods_supported: vec!["none".to_string()],
         code_challenge_methods_supported: vec!["S256".to_string()],
         grant_types_supported: vec!["authorization_code".to_string()],
         response_types_supported: vec!["code".to_string()],
