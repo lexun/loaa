@@ -4,6 +4,14 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 
+[lib]
+name = "loaa_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "loaa-mcp"
+path = "src/main.rs"
+
 [dependencies]
 loaa-core = { path = "../core" }
 rmcp = { version = "0.8.5", features = ["server", "macros", "transport-streamable-http-server"] }
