@@ -87,12 +87,17 @@ pub async fn validate_jwt(
         &DecodingKey::from_secret(jwt_secret.as_ref()),
         &validation
     ) {
-        Ok(_) => {
+        Ok(token_data) => {
             // Token is valid, proceed with request
+            eprintln!("✅ JWT valid for user: {}, method: {}, path: {}",
+                token_data.claims.sub,
+                req.method(),
+                req.uri().path()
+            );
             next.run(req).await
         }
         Err(e) => {
-            eprintln!("JWT validation failed: {}", e);
+            eprintln!("❌ JWT validation failed: {}", e);
             unauthorized_response(&base_url, &format!("Unauthorized: {}", e))
         }
     }

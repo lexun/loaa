@@ -130,7 +130,15 @@ jobs:
             # Create Caddyfile
             cat > Caddyfile << 'EOF'
             loaa.barbuto.family {
-                reverse_proxy loaa:3000
+                # Route MCP requests to the embedded MCP server on port 3001
+                handle /mcp* {
+                    reverse_proxy loaa-web:3001
+                }
+
+                # All other requests go to the web server on port 3000
+                handle {
+                    reverse_proxy loaa-web:3000
+                }
 
                 # Enable HSTS
                 header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
