@@ -70,4 +70,4 @@ See [AGENTS.md](AGENTS.md) for development workflow details.
 
 ## License
 
-TBD
+This project is licensed under the [Elastic License 2.0](LICENSE). You are free to use, modify, and distribute this software, but you may not provide it to others as a hosted or managed service.
