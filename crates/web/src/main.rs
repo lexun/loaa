@@ -15,7 +15,9 @@ async fn main() {
         OAuthState,
         AppState,
     };
+    use loaa_web::sse::sse_handler;
     use loaa_core::config::Config;
+    use loaa_core::create_event_channel;
     use tower_http::services::ServeDir;
     use tower_http::cors::CorsLayer;
     use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
@@ -56,16 +58,26 @@ async fn main() {
     println!("🔐 OAuth base URL: {}", base_url);
     let include_mcp = config.server.include_mcp;
 
+    // Create event channel for SSE real-time updates
+    let event_sender = create_event_channel(100);
+    println!("📺 SSE event channel created");
+
     if include_mcp {
         println!("📦 All-in-one mode: MCP server will be started");
 
-        // Spawn MCP server in background
+        // Spawn MCP server in background with event sender
         let mcp_config = config.clone();
         let mcp_jwt_secret = jwt_secret.clone();
         let mcp_base_url = base_url.clone();
+        let mcp_event_sender = event_sender.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = loaa_web::mcp::start_mcp_server(mcp_config, mcp_jwt_secret, mcp_base_url).await {
+            if let Err(e) = loaa_web::mcp::start_mcp_server(
+                mcp_config,
+                mcp_jwt_secret,
+                mcp_base_url,
+                Some(mcp_event_sender),
+            ).await {
                 eprintln!("❌ MCP server error: {}", e);
             }
         });
@@ -98,8 +110,15 @@ async fn main() {
         ])
         .allow_credentials(true);
 
+    // Create SSE router with its own state
+    let sse_router = Router::new()
+        .route("/events", get(sse_handler))
+        .with_state(event_sender);
+
     // Serve static files BEFORE leptos routes so they take precedence
     let app = Router::new()
+        // SSE endpoint for real-time updates (nested under /api)
+        .nest("/api", sse_router)
         // OAuth discovery endpoints (with CORS)
         .route(
             "/.well-known/oauth-authorization-server",

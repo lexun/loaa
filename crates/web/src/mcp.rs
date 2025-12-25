@@ -2,11 +2,18 @@
 /// This module allows the web server to optionally run the MCP server in the same process
 
 use loaa_core::config::Config;
+use loaa_core::EventSender;
 use anyhow::Result;
 
 /// Start the MCP server on a separate port in the same process
 /// This is spawned as a background task when LOAA_INCLUDE_MCP=true
-pub async fn start_mcp_server(config: Config, jwt_secret: String, base_url: String) -> Result<()> {
+/// If event_sender is provided, the server will emit events for data changes (SSE)
+pub async fn start_mcp_server(
+    config: Config,
+    jwt_secret: String,
+    base_url: String,
+    event_sender: Option<EventSender>,
+) -> Result<()> {
     eprintln!("🚀 Starting embedded MCP server...");
 
     let mcp_host = std::env::var("LOAA_MCP_HOST")
@@ -18,6 +25,9 @@ pub async fn start_mcp_server(config: Config, jwt_secret: String, base_url: Stri
 
     eprintln!("📡 MCP server will listen on http://{}:{}", mcp_host, mcp_port);
     eprintln!("⚠️  JWT authentication required for all MCP requests");
+    if event_sender.is_some() {
+        eprintln!("📺 SSE event broadcasting enabled");
+    }
 
     // Set environment variables for the MCP server to use
     std::env::set_var("LOAA_JWT_SECRET", &jwt_secret);
@@ -25,7 +35,7 @@ pub async fn start_mcp_server(config: Config, jwt_secret: String, base_url: Stri
 
     // Use run_http_server from loaa-mcp library
     // This handles server initialization, routing, and graceful shutdown
-    let server = loaa_mcp::LoaaServer::new(&config.database).await?;
+    let server = loaa_mcp::LoaaServer::with_event_sender(&config.database, event_sender).await?;
 
     eprintln!("✓ MCP server initialized");
     eprintln!("Available tools:");

@@ -2615,6 +2615,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "console_error_panic_hook",
+ "futures",
  "jsonwebtoken",
  "leptos",
  "leptos_axum",
@@ -2629,6 +2630,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
+ "tokio-stream",
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tower-sessions",
@@ -5151,6 +5153,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

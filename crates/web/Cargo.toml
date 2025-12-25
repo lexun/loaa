@@ -62,6 +62,8 @@ uuid = { version = "1.11", features = ["v4", "serde"], optional = true }
 loaa-mcp = { path = "../mcp", optional = true }
 serde_json = { version = "1.0", optional = true }
 anyhow = { version = "1.0", optional = true }
+tokio-stream = { version = "0.1", optional = true, features = ["sync"] }
+futures = { version = "0.3", optional = true }
 
 [features]
 hydrate = [
@@ -90,6 +92,8 @@ ssr = [
     "dep:loaa-mcp",
     "dep:serde_json",
     "dep:anyhow",
+    "dep:tokio-stream",
+    "dep:futures",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",

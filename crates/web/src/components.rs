@@ -2,6 +2,11 @@ use leptos::*;
 use crate::server_functions::*;
 use crate::dto::*;
 
+#[cfg(feature = "hydrate")]
+use wasm_bindgen::prelude::*;
+#[cfg(feature = "hydrate")]
+use wasm_bindgen::JsCast;
+
 #[derive(Debug, Clone)]
 pub enum View {
     Login,
@@ -201,7 +206,42 @@ pub fn Dashboard() -> impl IntoView {
 
 #[component]
 fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
-    let dashboard_data = create_resource(|| (), |_| get_dashboard_data());
+    // Create a signal to trigger refetches
+    #[allow(unused_variables)]
+    let (refetch_trigger, set_refetch_trigger) = create_signal(0u32);
+
+    // Resource that refetches when trigger changes
+    let dashboard_data = create_resource(
+        move || refetch_trigger.get(),
+        |_| get_dashboard_data()
+    );
+
+    // Set up SSE connection for real-time updates (client-side only)
+    #[cfg(feature = "hydrate")]
+    {
+        create_effect(move |_| {
+            use web_sys::{EventSource, MessageEvent};
+
+            let es = EventSource::new("/api/events").ok();
+            if let Some(event_source) = es {
+                let trigger = set_refetch_trigger;
+                let onmessage = Closure::<dyn Fn(MessageEvent)>::new(move |_event: MessageEvent| {
+                    // Trigger a refetch when any event comes in
+                    trigger.update(|n| *n += 1);
+                });
+                event_source.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+                onmessage.forget(); // Leak the closure to keep it alive
+
+                let onerror = Closure::<dyn Fn()>::new(move || {
+                    leptos::logging::log!("SSE connection error - will auto-reconnect");
+                });
+                event_source.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+                onerror.forget();
+
+                leptos::logging::log!("SSE connection established");
+            }
+        });
+    }
 
     view! {
         <Suspense fallback=move || view! { <p>"Loading dashboard..."</p> }>

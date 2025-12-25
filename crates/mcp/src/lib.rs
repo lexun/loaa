@@ -8,6 +8,7 @@ pub mod auth;
 use anyhow::Result;
 use loaa_core::db::{init_database_with_config, KidRepository, LedgerRepository, TaskRepository};
 use loaa_core::config::DatabaseConfig;
+use loaa_core::events::{DataEvent, EventSender, broadcast_event};
 use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Task};
 use loaa_core::workflows::TaskCompletionWorkflow;
 use rmcp::handler::server::router::tool::ToolRouter;
@@ -31,6 +32,7 @@ pub struct LoaaServer {
     kid_repo: Arc<RwLock<KidRepository>>,
     ledger_repo: Arc<RwLock<LedgerRepository>>,
     workflow: Arc<RwLock<TaskCompletionWorkflow>>,
+    event_sender: Option<EventSender>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -110,6 +112,10 @@ struct AdjustBalanceParams {
 #[tool_router]
 impl LoaaServer {
     pub async fn new(db_config: &DatabaseConfig) -> Result<Self> {
+        Self::with_event_sender(db_config, None).await
+    }
+
+    pub async fn with_event_sender(db_config: &DatabaseConfig, event_sender: Option<EventSender>) -> Result<Self> {
         let database = init_database_with_config(db_config).await?;
         let task_repo = TaskRepository::new(database.client.clone());
         let kid_repo = KidRepository::new(database.client.clone());
@@ -126,8 +132,16 @@ impl LoaaServer {
             kid_repo: Arc::new(RwLock::new(kid_repo)),
             ledger_repo: Arc::new(RwLock::new(ledger_repo)),
             workflow: Arc::new(RwLock::new(workflow)),
+            event_sender,
             tool_router: Self::tool_router(),
         })
+    }
+
+    /// Emit an event to connected SSE clients
+    fn emit_event(&self, event: DataEvent) {
+        if let Some(ref tx) = self.event_sender {
+            broadcast_event(tx, event);
+        }
     }
 
     #[tool(description = "Create a new kid in the system. Returns the created kid with their ID.")]
@@ -143,6 +157,12 @@ impl LoaaServer {
         let created = kid_repo.create(kid).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
+
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::KidCreated {
+            id: created.id.to_string(),
+            name: created.name.clone(),
+        });
 
         let response = json!({
             "id": created.id.to_string(),
@@ -189,6 +209,11 @@ impl LoaaServer {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
 
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::KidDeleted {
+            id: kid_id.to_string(),
+        });
+
         let response = json!({
             "success": true,
             "message": format!("Kid {} deleted successfully", kid_id)
@@ -230,6 +255,12 @@ impl LoaaServer {
         let created = task_repo.create(task).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
+
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::TaskCreated {
+            id: created.id.to_string(),
+            name: created.name.clone(),
+        });
 
         let response = json!({
             "id": created.id.to_string(),
@@ -322,6 +353,12 @@ impl LoaaServer {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
 
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::TaskUpdated {
+            id: updated.id.to_string(),
+            name: updated.name.clone(),
+        });
+
         let response = json!({
             "id": updated.id.to_string(),
             "name": updated.name,
@@ -354,6 +391,11 @@ impl LoaaServer {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
 
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::TaskDeleted {
+            id: task_id.to_string(),
+        });
+
         let response = json!({
             "success": true,
             "message": format!("Task {} deleted successfully", task_id)
@@ -383,6 +425,13 @@ impl LoaaServer {
             .map_err(|e| {
                 McpError::internal_error("workflow_error", Some(json!({"error": e.to_string()})))
             })?;
+
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::TaskCompleted {
+            kid_id: kid_uuid.to_string(),
+            task_id: task_uuid.to_string(),
+            amount: entry.amount.to_string(),
+        });
 
         let response = json!({
             "success": true,
@@ -450,11 +499,19 @@ impl LoaaServer {
             McpError::invalid_request(format!("Invalid amount format: {}", e), None)
         })?;
 
+        let description = params.description.clone();
         let entry = LedgerEntry::adjusted(kid_uuid, amount_dec, params.description);
         let ledger_repo = self.ledger_repo.read().await;
         let created = ledger_repo.create_entry(entry).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
+
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::BalanceAdjusted {
+            kid_id: kid_uuid.to_string(),
+            amount: amount_dec.to_string(),
+            description,
+        });
 
         let response = json!({
             "success": true,
@@ -536,6 +593,7 @@ pub async fn run_stdio_server(server: LoaaServer) -> Result<()> {
 }
 
 /// Run the MCP server with HTTP/SSE transport (for remote access)
+/// If event_sender is provided, the server will emit events for data changes
 pub async fn run_http_server(server: LoaaServer, host: &str, port: u16) -> Result<()> {
     use axum::{Router, middleware};
     use rmcp::transport::streamable_http_server::{
