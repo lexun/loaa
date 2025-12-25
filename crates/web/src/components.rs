@@ -206,15 +206,18 @@ pub fn Dashboard() -> impl IntoView {
 
 #[component]
 fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
-    // Create a signal to trigger refetches
-    #[allow(unused_variables)]
-    let (refetch_trigger, set_refetch_trigger) = create_signal(0u32);
+    // Initial data load
+    let dashboard_data = create_resource(|| (), |_| get_dashboard_data());
 
-    // Resource that refetches when trigger changes
-    let dashboard_data = create_resource(
-        move || refetch_trigger.get(),
-        |_| get_dashboard_data()
-    );
+    // Cached data signal - keeps showing old data while refreshing
+    let (cached_data, set_cached_data) = create_signal(Option::<DashboardDataDto>::None);
+
+    // Update cached data when resource loads
+    create_effect(move |_| {
+        if let Some(Ok(data)) = dashboard_data.get() {
+            set_cached_data.set(Some(data));
+        }
+    });
 
     // Set up SSE connection for real-time updates (client-side only)
     #[cfg(feature = "hydrate")]
@@ -224,13 +227,16 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
 
             let es = EventSource::new("/api/events").ok();
             if let Some(event_source) = es {
-                let trigger = set_refetch_trigger;
                 let onmessage = Closure::<dyn Fn(MessageEvent)>::new(move |_event: MessageEvent| {
-                    // Trigger a refetch when any event comes in
-                    trigger.update(|n| *n += 1);
+                    // Fetch new data in background and update cache directly
+                    spawn_local(async move {
+                        if let Ok(data) = get_dashboard_data().await {
+                            set_cached_data.set(Some(data));
+                        }
+                    });
                 });
                 event_source.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-                onmessage.forget(); // Leak the closure to keep it alive
+                onmessage.forget();
 
                 let onerror = Closure::<dyn Fn()>::new(move || {
                     leptos::logging::log!("SSE connection error - will auto-reconnect");
@@ -244,45 +250,43 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
     }
 
     view! {
-        <Suspense fallback=move || view! { <p>"Loading dashboard..."</p> }>
-            {move || {
-                dashboard_data.get().map(|result| match result {
-                    Ok(data) => {
-                        view! {
-                            <div>
-                                <section class="overview">
-                                    <h2>"Overview"</h2>
-                                    <div class="stats">
-                                        <div class="stat">
-                                            <span class="stat-label">"Total Kids:"</span>
-                                            <span class="stat-value">{data.total_kids}</span>
-                                        </div>
-                                        <div class="stat">
-                                            <span class="stat-label">"Active Tasks:"</span>
-                                            <span class="stat-value">{data.active_tasks}</span>
-                                        </div>
-                                    </div>
-                                </section>
-
-                                <section class="kids-section">
-                                    <h2>"Kids"</h2>
-                                    <div class="kids-grid">
-                                        {data.kid_summaries.into_iter().map(|summary| {
-                                            view! { <KidSummaryCard summary=summary set_view=set_view /> }
-                                        }).collect::<Vec<_>>()}
-                                    </div>
-                                </section>
-
-                                <RecentActivity />
+        // Show loading only on initial load, not on refreshes
+        {move || {
+            if let Some(data) = cached_data.get() {
+                // We have cached data, show it (updates smoothly)
+                view! {
+                    <div>
+                        <section class="overview">
+                            <h2>"Overview"</h2>
+                            <div class="stats">
+                                <div class="stat">
+                                    <span class="stat-label">"Total Kids:"</span>
+                                    <span class="stat-value">{data.total_kids}</span>
+                                </div>
+                                <div class="stat">
+                                    <span class="stat-label">"Active Tasks:"</span>
+                                    <span class="stat-value">{data.active_tasks}</span>
+                                </div>
                             </div>
-                        }.into_view()
-                    }
-                    Err(e) => view! {
-                        <p class="error">"Error loading dashboard: " {e.to_string()}</p>
-                    }.into_view(),
-                })
-            }}
-        </Suspense>
+                        </section>
+
+                        <section class="kids-section">
+                            <h2>"Kids"</h2>
+                            <div class="kids-grid">
+                                {data.kid_summaries.into_iter().map(|summary| {
+                                    view! { <KidSummaryCard summary=summary set_view=set_view /> }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        </section>
+
+                        <RecentActivity />
+                    </div>
+                }.into_view()
+            } else {
+                // Initial load - show loading
+                view! { <p>"Loading dashboard..."</p> }.into_view()
+            }
+        }}
     }
 }
 
