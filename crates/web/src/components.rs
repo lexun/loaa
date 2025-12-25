@@ -209,29 +209,56 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
     // Initial data load
     let dashboard_data = create_resource(|| (), |_| get_dashboard_data());
 
-    // Cached data signal - keeps showing old data while refreshing
-    let (cached_data, set_cached_data) = create_signal(Option::<DashboardDataDto>::None);
+    // Fine-grained signals for each piece of data to avoid full DOM replacement
+    let (total_kids, set_total_kids) = create_signal(0usize);
+    let (active_tasks, set_active_tasks) = create_signal(0usize);
+    let (kid_summaries, set_kid_summaries) = create_signal(Vec::<KidSummaryDto>::new());
+    let (is_loaded, set_is_loaded) = create_signal(false);
+    let (recent_activity, set_recent_activity) = create_signal(Vec::<LedgerEntryDto>::new());
 
-    // Update cached data when resource loads
+    // Update signals when resource loads
     create_effect(move |_| {
         if let Some(Ok(data)) = dashboard_data.get() {
-            set_cached_data.set(Some(data));
+            set_total_kids.set(data.total_kids);
+            set_active_tasks.set(data.active_tasks);
+            set_kid_summaries.set(data.kid_summaries);
+            set_is_loaded.set(true);
+            // Also fetch recent activity
+            spawn_local(async move {
+                if let Ok(entries) = get_recent_activity(10).await {
+                    set_recent_activity.set(entries);
+                }
+            });
         }
     });
 
     // Set up SSE connection for real-time updates (client-side only)
     #[cfg(feature = "hydrate")]
     {
+        // Use create_effect with a guard to only set up SSE once
+        let (sse_initialized, set_sse_initialized) = create_signal(false);
+
         create_effect(move |_| {
+            // Only initialize SSE once
+            if sse_initialized.get() {
+                return;
+            }
+            set_sse_initialized.set(true);
+
             use web_sys::{EventSource, MessageEvent};
 
             let es = EventSource::new("/api/events").ok();
             if let Some(event_source) = es {
                 let onmessage = Closure::<dyn Fn(MessageEvent)>::new(move |_event: MessageEvent| {
-                    // Fetch new data in background and update cache directly
+                    // Fetch new data in background and update fine-grained signals
                     spawn_local(async move {
                         if let Ok(data) = get_dashboard_data().await {
-                            set_cached_data.set(Some(data));
+                            set_total_kids.set(data.total_kids);
+                            set_active_tasks.set(data.active_tasks);
+                            set_kid_summaries.set(data.kid_summaries);
+                        }
+                        if let Ok(entries) = get_recent_activity(10).await {
+                            set_recent_activity.set(entries);
                         }
                     });
                 });
@@ -250,43 +277,74 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
     }
 
     view! {
-        // Show loading only on initial load, not on refreshes
-        {move || {
-            if let Some(data) = cached_data.get() {
-                // We have cached data, show it (updates smoothly)
-                view! {
-                    <div>
-                        <section class="overview">
-                            <h2>"Overview"</h2>
-                            <div class="stats">
-                                <div class="stat">
-                                    <span class="stat-label">"Total Kids:"</span>
-                                    <span class="stat-value">{data.total_kids}</span>
-                                </div>
-                                <div class="stat">
-                                    <span class="stat-label">"Active Tasks:"</span>
-                                    <span class="stat-value">{data.active_tasks}</span>
-                                </div>
-                            </div>
-                        </section>
-
-                        <section class="kids-section">
-                            <h2>"Kids"</h2>
-                            <div class="kids-grid">
-                                {data.kid_summaries.into_iter().map(|summary| {
-                                    view! { <KidSummaryCard summary=summary set_view=set_view /> }
-                                }).collect::<Vec<_>>()}
-                            </div>
-                        </section>
-
-                        <RecentActivity />
+        <Show
+            when=move || is_loaded.get()
+            fallback=|| view! { <p>"Loading dashboard..."</p> }
+        >
+            <div>
+                <section class="overview">
+                    <h2>"Overview"</h2>
+                    <div class="stats">
+                        <div class="stat">
+                            <span class="stat-label">"Total Kids:"</span>
+                            <span class="stat-value">{move || total_kids.get()}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">"Active Tasks:"</span>
+                            <span class="stat-value">{move || active_tasks.get()}</span>
+                        </div>
                     </div>
-                }.into_view()
-            } else {
-                // Initial load - show loading
-                view! { <p>"Loading dashboard..."</p> }.into_view()
-            }
-        }}
+                </section>
+
+                <section class="kids-section">
+                    <h2>"Kids"</h2>
+                    <div class="kids-grid">
+                        <For
+                            each=move || kid_summaries.get()
+                            key=|summary| summary.kid.id.clone()
+                            children=move |summary| {
+                                view! { <KidSummaryCard summary=summary set_view=set_view /> }
+                            }
+                        />
+                    </div>
+                </section>
+
+                <section class="recent-activity">
+                    <h2>"Recent Activity"</h2>
+                    {move || {
+                        let entries = recent_activity.get();
+                        if entries.is_empty() {
+                            view! { <p>"No activity yet."</p> }.into_view()
+                        } else {
+                            view! {
+                                <ul class="activity-list">
+                                    <For
+                                        each=move || recent_activity.get()
+                                        key=|entry| entry.id.clone()
+                                        children=move |entry| {
+                                            let entry_type = match entry.entry_type {
+                                                EntryTypeDto::Earned => "Earned",
+                                                EntryTypeDto::Adjusted => "Adjusted",
+                                            };
+                                            let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
+                                            let time_ago = format_time_ago(entry.created_at);
+                                            view! {
+                                                <li class="activity-item">
+                                                    <span class="activity-time">{time_ago}</span>
+                                                    <span class="activity-type">{entry_type}</span>
+                                                    <span class="activity-description">{entry.description.clone()}</span>
+                                                    <span class="activity-amount">{sign}{"$"}{entry.amount.to_string()}</span>
+                                                </li>
+                                            }
+                                        }
+                                    />
+                                </ul>
+                            }.into_view()
+                        }
+                    }}
+                </section>
+            </div>
+        </Show>
     }
 }
 
@@ -323,51 +381,6 @@ fn KidSummaryCard(summary: KidSummaryDto, set_view: WriteSignal<View>) -> impl I
     }
 }
 
-#[component]
-fn RecentActivity() -> impl IntoView {
-    let activity = create_resource(|| (), |_| get_recent_activity(10));
-
-    view! {
-        <section class="recent-activity">
-            <h2>"Recent Activity"</h2>
-            <Suspense fallback=move || view! { <p>"Loading activity..."</p> }>
-                {move || {
-                    activity.get().map(|result| match result {
-                        Ok(entries) => {
-                            if entries.is_empty() {
-                                view! { <p>"No activity yet."</p> }.into_view()
-                            } else {
-                                view! {
-                                    <ul class="activity-list">
-                                        {entries.into_iter().map(|entry| {
-                                            let entry_type = match entry.entry_type {
-                                                EntryTypeDto::Earned => "Earned",
-                                                EntryTypeDto::Adjusted => "Adjusted",
-                                            };
-                                            let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
-                                            let time_ago = format_time_ago(entry.created_at);
-                                            view! {
-                                                <li class="activity-item">
-                                                    <span class="activity-time">{time_ago}</span>
-                                                    <span class="activity-type">{entry_type}</span>
-                                                    <span class="activity-description">{entry.description}</span>
-                                                    <span class="activity-amount">{sign}{"$"}{entry.amount.to_string()}</span>
-                                                </li>
-                                            }
-                                        }).collect::<Vec<_>>()}
-                                    </ul>
-                                }.into_view()
-                            }
-                        }
-                        Err(e) => view! {
-                            <p class="error">"Error loading activity: " {e.to_string()}</p>
-                        }.into_view(),
-                    })
-                }}
-            </Suspense>
-        </section>
-    }
-}
 
 fn format_time_ago(dt: chrono::DateTime<chrono::Utc>) -> String {
     let now = chrono::Utc::now();
