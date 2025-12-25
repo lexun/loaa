@@ -210,21 +210,21 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
     let dashboard_data = create_resource(|| (), |_| get_dashboard_data());
 
     // Fine-grained signals for each piece of data to avoid full DOM replacement
-    let (total_kids, set_total_kids) = create_signal(0usize);
-    let (active_tasks, set_active_tasks) = create_signal(0usize);
     let (kid_summaries, set_kid_summaries) = create_signal(Vec::<KidSummaryDto>::new());
+    let (tasks, set_tasks) = create_signal(Vec::<TaskDto>::new());
     let (is_loaded, set_is_loaded) = create_signal(false);
     let (recent_activity, set_recent_activity) = create_signal(Vec::<LedgerEntryDto>::new());
 
     // Update signals when resource loads
     create_effect(move |_| {
         if let Some(Ok(data)) = dashboard_data.get() {
-            set_total_kids.set(data.total_kids);
-            set_active_tasks.set(data.active_tasks);
             set_kid_summaries.set(data.kid_summaries);
             set_is_loaded.set(true);
-            // Also fetch recent activity
+            // Also fetch tasks and recent activity
             spawn_local(async move {
+                if let Ok(task_list) = get_tasks().await {
+                    set_tasks.set(task_list);
+                }
                 if let Ok(entries) = get_recent_activity(10).await {
                     set_recent_activity.set(entries);
                 }
@@ -253,9 +253,10 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                     // Fetch new data in background and update fine-grained signals
                     spawn_local(async move {
                         if let Ok(data) = get_dashboard_data().await {
-                            set_total_kids.set(data.total_kids);
-                            set_active_tasks.set(data.active_tasks);
                             set_kid_summaries.set(data.kid_summaries);
+                        }
+                        if let Ok(task_list) = get_tasks().await {
+                            set_tasks.set(task_list);
                         }
                         if let Ok(entries) = get_recent_activity(10).await {
                             set_recent_activity.set(entries);
@@ -282,20 +283,6 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
             fallback=|| view! { <p>"Loading dashboard..."</p> }
         >
             <div>
-                <section class="overview">
-                    <h2>"Overview"</h2>
-                    <div class="stats">
-                        <div class="stat">
-                            <span class="stat-label">"Total Kids:"</span>
-                            <span class="stat-value">{move || total_kids.get()}</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-label">"Active Tasks:"</span>
-                            <span class="stat-value">{move || active_tasks.get()}</span>
-                        </div>
-                    </div>
-                </section>
-
                 <section class="kids-section">
                     <h2>"Kids"</h2>
                     <div class="kids-grid">
@@ -303,6 +290,38 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                             view! { <KidSummaryCard summary=summary set_view=set_view /> }
                         }).collect::<Vec<_>>()}
                     </div>
+                </section>
+
+                <section class="tasks-section">
+                    <h2>"Tasks"</h2>
+                    {move || {
+                        let task_list = tasks.get();
+                        if task_list.is_empty() {
+                            view! { <p class="empty-state">"No tasks yet. Create tasks via Claude."</p> }.into_view()
+                        } else {
+                            view! {
+                                <div class="tasks-grid">
+                                    {task_list.into_iter().map(|task| {
+                                        let cadence_label = match task.cadence {
+                                            CadenceDto::Daily => "Daily",
+                                            CadenceDto::Weekly => "Weekly",
+                                            CadenceDto::OneTime => "One-time",
+                                        };
+                                        view! {
+                                            <div class="task-card">
+                                                <div class="task-header">
+                                                    <h3>{task.name}</h3>
+                                                    <span class="task-value">"$"{task.value.to_string()}</span>
+                                                </div>
+                                                <p class="task-description">{task.description}</p>
+                                                <span class="task-cadence">{cadence_label}</span>
+                                            </div>
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
+                            }.into_view()
+                        }
+                    }}
                 </section>
 
                 <section class="recent-activity">
