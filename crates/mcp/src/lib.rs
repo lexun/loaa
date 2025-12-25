@@ -42,6 +42,12 @@ struct CreateKidParams {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct DeleteKidParams {
+    #[schemars(description = "ID of the kid to delete")]
+    id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct CreateTaskParams {
     #[schemars(description = "Name of the task")]
     name: String,
@@ -162,6 +168,30 @@ impl LoaaServer {
                 "name": k.name,
                 "created_at": k.created_at.to_rfc3339()
             })).collect::<Vec<_>>()
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap(),
+        )]))
+    }
+
+    #[tool(description = "Delete a kid by ID. This will also delete all associated ledger entries.")]
+    async fn delete_kid(
+        &self,
+        Parameters(params): Parameters<DeleteKidParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let kid_id = Uuid::parse_str(&params.id).map_err(|e| {
+            McpError::invalid_request(format!("Invalid kid ID: {}", e), None)
+        })?;
+
+        let kid_repo = self.kid_repo.read().await;
+        kid_repo.delete(kid_id).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
+        })?;
+
+        let response = json!({
+            "success": true,
+            "message": format!("Kid {} deleted successfully", kid_id)
         });
 
         Ok(CallToolResult::success(vec![Content::text(

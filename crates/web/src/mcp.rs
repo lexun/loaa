@@ -31,6 +31,7 @@ pub async fn start_mcp_server(config: Config, jwt_secret: String, base_url: Stri
     eprintln!("Available tools:");
     eprintln!("  - create_kid: Create a new kid");
     eprintln!("  - list_kids: List all kids");
+    eprintln!("  - delete_kid: Delete a kid");
     eprintln!("  - create_task: Create a new task");
     eprintln!("  - list_tasks: List all tasks");
     eprintln!("  - update_task: Update an existing task");
