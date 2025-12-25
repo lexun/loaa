@@ -15,6 +15,7 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
     let (password, set_password) = create_signal(String::new());
     let (error, set_error) = create_signal(Option::<String>::None);
     let (logging_in, set_logging_in) = create_signal(false);
+    let (oauth_completing, set_oauth_completing) = create_signal(false);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -32,6 +33,9 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
                         Ok(Some(oauth_url)) => {
                             // Redirect to OAuth authorization endpoint
                             leptos::logging::log!("Redirecting to OAuth: {}", oauth_url);
+                            // Update UI to show OAuth is completing (not stuck on "logging in")
+                            set_logging_in.set(false);
+                            set_oauth_completing.set(true);
                             let window = leptos::window();
                             if let Ok(location) = window.location().href() {
                                 leptos::logging::log!("Current location: {}", location);
@@ -68,45 +72,56 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
                 <h1>"Loa'a"</h1>
                 <p class="subtitle">"Chore and rewards tracking system"</p>
 
-                <form on:submit=on_submit>
-                    <div class="form-group">
-                        <label for="username">"Username"</label>
-                        <input
-                            type="text"
-                            id="username"
-                            name="username"
-                            required
-                            disabled=move || logging_in.get()
-                            on:input=move |ev| set_username.set(event_target_value(&ev))
-                            prop:value=move || username.get()
-                        />
-                    </div>
+                {move || if oauth_completing.get() {
+                    view! {
+                        <div class="oauth-completing">
+                            <p class="oauth-message">"Completing authorization..."</p>
+                            <p class="oauth-hint">"You can close this window and return to Claude."</p>
+                        </div>
+                    }.into_view()
+                } else {
+                    view! {
+                        <form on:submit=on_submit>
+                            <div class="form-group">
+                                <label for="username">"Username"</label>
+                                <input
+                                    type="text"
+                                    id="username"
+                                    name="username"
+                                    required
+                                    disabled=move || logging_in.get()
+                                    on:input=move |ev| set_username.set(event_target_value(&ev))
+                                    prop:value=move || username.get()
+                                />
+                            </div>
 
-                    <div class="form-group">
-                        <label for="password">"Password"</label>
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            required
-                            disabled=move || logging_in.get()
-                            on:input=move |ev| set_password.set(event_target_value(&ev))
-                            prop:value=move || password.get()
-                        />
-                    </div>
+                            <div class="form-group">
+                                <label for="password">"Password"</label>
+                                <input
+                                    type="password"
+                                    id="password"
+                                    name="password"
+                                    required
+                                    disabled=move || logging_in.get()
+                                    on:input=move |ev| set_password.set(event_target_value(&ev))
+                                    prop:value=move || password.get()
+                                />
+                            </div>
 
-                    {move || error.get().map(|err| view! {
-                        <p class="error">{err}</p>
-                    })}
+                            {move || error.get().map(|err| view! {
+                                <p class="error">{err}</p>
+                            })}
 
-                    <button
-                        type="submit"
-                        class="login-btn"
-                        disabled=move || logging_in.get()
-                    >
-                        {move || if logging_in.get() { "Logging in..." } else { "Log In" }}
-                    </button>
-                </form>
+                            <button
+                                type="submit"
+                                class="login-btn"
+                                disabled=move || logging_in.get()
+                            >
+                                {move || if logging_in.get() { "Logging in..." } else { "Log In" }}
+                            </button>
+                        </form>
+                    }.into_view()
+                }}
             </div>
         </div>
     }
