@@ -299,13 +299,9 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                 <section class="kids-section">
                     <h2>"Kids"</h2>
                     <div class="kids-grid">
-                        <For
-                            each=move || kid_summaries.get()
-                            key=|summary| summary.kid.id.clone()
-                            children=move |summary| {
-                                view! { <KidSummaryCard summary=summary set_view=set_view /> }
-                            }
-                        />
+                        {move || kid_summaries.get().into_iter().map(|summary| {
+                            view! { <KidSummaryCard summary=summary set_view=set_view /> }
+                        }).collect::<Vec<_>>()}
                     </div>
                 </section>
 
