@@ -12,6 +12,9 @@ pub struct Task {
     pub description: String,
     pub value: Decimal,
     pub cadence: Cadence,
+    /// Owner of this task (user_id as string, or "admin" for admin-created)
+    #[serde(default)]
+    pub owner_id: String,
     pub last_reset: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -25,7 +28,7 @@ pub enum Cadence {
 }
 
 impl Task {
-    pub fn new(name: String, description: String, value: Decimal, cadence: Cadence) -> Result<Self> {
+    pub fn new(name: String, description: String, value: Decimal, cadence: Cadence, owner_id: String) -> Result<Self> {
         let now = Utc::now();
         let task = Self {
             id: Uuid::new_v4(),
@@ -33,6 +36,7 @@ impl Task {
             description: description.trim().to_string(),
             value,
             cadence,
+            owner_id,
             last_reset: now,
             created_at: now,
             updated_at: now,
@@ -83,9 +87,11 @@ mod tests {
             "Empty all trash bins".to_string(),
             dec!(1.50),
             Cadence::Daily,
+            "test-owner".to_string(),
         ).unwrap();
         assert_eq!(task.name, "Take out trash");
         assert_eq!(task.value, dec!(1.50));
+        assert_eq!(task.owner_id, "test-owner");
     }
 
     #[test]
@@ -95,6 +101,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::Daily,
+            "test-owner".to_string(),
         );
         assert!(result.is_err());
     }
@@ -106,6 +113,7 @@ mod tests {
             "".to_string(),
             dec!(0),
             Cadence::Daily,
+            "test-owner".to_string(),
         );
         assert!(result.is_err());
     }
@@ -117,6 +125,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::Daily,
+            "test-owner".to_string(),
         ).unwrap();
         task.last_reset = Utc::now() - Duration::days(2);
         assert!(task.needs_reset());
@@ -129,6 +138,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::OneTime,
+            "test-owner".to_string(),
         ).unwrap();
         assert!(!task.needs_reset());
     }

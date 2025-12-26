@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a kid
     println!("Creating a test kid...");
-    let kid = Kid::new("Test Kid".to_string())?;
+    let kid = Kid::new("Test Kid".to_string(), "test-owner".to_string())?;
     let created = kid_repo.create(kid).await?;
     println!("✓ Created: {} (ID: {})\n", created.name, created.id);
 

@@ -25,7 +25,9 @@ async fn main() -> Result<()> {
 
     eprintln!("Transport mode: {}", transport_mode);
 
-    let server = LoaaServer::new(&config.database).await?;
+    // TODO: Get owner_id from OAuth token when wiring up user context
+    let owner_id = "admin".to_string();
+    let server = LoaaServer::new(&config.database, owner_id).await?;
 
     eprintln!("Loa'a MCP Server started successfully!");
     eprintln!("Available tools:");

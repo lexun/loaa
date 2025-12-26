@@ -23,6 +23,7 @@ async fn test_create_task() {
         "Empty all trash bins".to_string(),
         dec!(1.50),
         Cadence::Daily,
+        "test-owner".to_string(),
     )
     .unwrap();
 
@@ -41,6 +42,7 @@ async fn test_get_task() {
         "Wash and dry all dishes".to_string(),
         dec!(2.00),
         Cadence::Daily,
+        "test-owner".to_string(),
     )
     .unwrap();
 
@@ -71,6 +73,7 @@ async fn test_list_tasks() {
         "Description 1".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        "test-owner".to_string(),
     )
     .unwrap();
 
@@ -79,6 +82,7 @@ async fn test_list_tasks() {
         "Description 2".to_string(),
         dec!(2.00),
         Cadence::Weekly,
+        "test-owner".to_string(),
     )
     .unwrap();
 
@@ -87,6 +91,7 @@ async fn test_list_tasks() {
         "Description 3".to_string(),
         dec!(3.00),
         Cadence::OneTime,
+        "test-owner".to_string(),
     )
     .unwrap();
 
@@ -107,6 +112,7 @@ async fn test_update_task() {
         "Original description".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        "test-owner".to_string(),
     )
     .unwrap();
 
@@ -141,6 +147,7 @@ async fn test_update_nonexistent_task() {
         "Test".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        "test-owner".to_string(),
     )
     .unwrap();
 
@@ -157,6 +164,7 @@ async fn test_delete_task() {
         "This will be deleted".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        "test-owner".to_string(),
     )
     .unwrap();
 

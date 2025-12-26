@@ -6,7 +6,7 @@
 pub mod auth;
 
 use anyhow::Result;
-use loaa_core::db::{init_database_with_config, KidRepository, LedgerRepository, TaskRepository};
+use loaa_core::db::{init_database_with_config, Database, KidRepository, LedgerRepository, TaskRepository};
 use loaa_core::config::DatabaseConfig;
 use loaa_core::events::{DataEvent, EventSender, broadcast_event};
 use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Task};
@@ -25,6 +25,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+use crate::auth::AuthenticatedUser;
+
 /// Context shared across all MCP tool calls
 #[derive(Clone)]
 pub struct LoaaServer {
@@ -33,6 +35,8 @@ pub struct LoaaServer {
     ledger_repo: Arc<RwLock<LedgerRepository>>,
     workflow: Arc<RwLock<TaskCompletionWorkflow>>,
     event_sender: Option<EventSender>,
+    /// The owner ID for this session (user_id from OAuth token)
+    owner_id: String,
     tool_router: ToolRouter<Self>,
 }
 
@@ -111,12 +115,23 @@ struct AdjustBalanceParams {
 
 #[tool_router]
 impl LoaaServer {
-    pub async fn new(db_config: &DatabaseConfig) -> Result<Self> {
-        Self::with_event_sender(db_config, None).await
+    pub async fn new(db_config: &DatabaseConfig, owner_id: String) -> Result<Self> {
+        Self::with_event_sender(db_config, None, owner_id).await
     }
 
-    pub async fn with_event_sender(db_config: &DatabaseConfig, event_sender: Option<EventSender>) -> Result<Self> {
+    pub async fn with_event_sender(db_config: &DatabaseConfig, event_sender: Option<EventSender>, owner_id: String) -> Result<Self> {
         let database = init_database_with_config(db_config).await?;
+        Self::with_shared_database(&database, event_sender, owner_id)
+    }
+
+    /// Create a LoaaServer with a shared database connection.
+    /// This is useful for HTTP mode where we want to create per-user server instances
+    /// without reinitializing the database connection each time.
+    pub fn with_shared_database(
+        database: &Database,
+        event_sender: Option<EventSender>,
+        owner_id: String,
+    ) -> Result<Self> {
         let task_repo = TaskRepository::new(database.client.clone());
         let kid_repo = KidRepository::new(database.client.clone());
         let ledger_repo = LedgerRepository::new(database.client.clone());
@@ -133,6 +148,7 @@ impl LoaaServer {
             ledger_repo: Arc::new(RwLock::new(ledger_repo)),
             workflow: Arc::new(RwLock::new(workflow)),
             event_sender,
+            owner_id,
             tool_router: Self::tool_router(),
         })
     }
@@ -144,12 +160,29 @@ impl LoaaServer {
         }
     }
 
+    /// Get the owner_id from HTTP request context (JWT) or fall back to the server default.
+    /// In HTTP mode with JWT auth, the AuthenticatedUser is extracted from request extensions.
+    /// In stdio mode (local CLI), we use the server's owner_id.
+    fn get_owner_id(&self, extensions: &Extensions) -> String {
+        // Try to get HTTP Parts from MCP extensions (only present in HTTP mode)
+        if let Some(parts) = extensions.get::<http::request::Parts>() {
+            // Try to get AuthenticatedUser from HTTP request extensions
+            if let Some(auth_user) = parts.extensions.get::<AuthenticatedUser>() {
+                return auth_user.user_id.clone();
+            }
+        }
+        // Fall back to server default (for stdio mode or if JWT extraction fails)
+        self.owner_id.clone()
+    }
+
     #[tool(description = "Create a new kid in the system. Returns the created kid with their ID.")]
     async fn create_kid(
         &self,
+        extensions: Extensions,
         Parameters(params): Parameters<CreateKidParams>,
     ) -> Result<CallToolResult, McpError> {
-        let kid = Kid::new(params.name).map_err(|e| {
+        let owner_id = self.get_owner_id(&extensions);
+        let kid = Kid::new(params.name, owner_id).map_err(|e| {
             McpError::invalid_request(e.to_string(), None)
         })?;
 
@@ -175,10 +208,11 @@ impl LoaaServer {
         )]))
     }
 
-    #[tool(description = "List all kids in the system.")]
-    async fn list_kids(&self) -> Result<CallToolResult, McpError> {
+    #[tool(description = "List all kids owned by the current user.")]
+    async fn list_kids(&self, extensions: Extensions) -> Result<CallToolResult, McpError> {
+        let owner_id = self.get_owner_id(&extensions);
         let kid_repo = self.kid_repo.read().await;
-        let kids = kid_repo.list().await.map_err(|e| {
+        let kids = kid_repo.list_by_owner(&owner_id).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
 
@@ -227,8 +261,10 @@ impl LoaaServer {
     #[tool(description = "Create a new task. Value should be a decimal string (e.g., '1.50'). Cadence must be one of: 'daily', 'weekly', 'onetime'.")]
     async fn create_task(
         &self,
+        extensions: Extensions,
         Parameters(params): Parameters<CreateTaskParams>,
     ) -> Result<CallToolResult, McpError> {
+        let owner_id = self.get_owner_id(&extensions);
         let value_dec =
             Decimal::from_str(&params.value).map_err(|e| {
                 McpError::invalid_request(format!("Invalid value format: {}", e), None)
@@ -246,7 +282,7 @@ impl LoaaServer {
             }
         };
 
-        let task = Task::new(params.name, params.description, value_dec, cadence_enum)
+        let task = Task::new(params.name, params.description, value_dec, cadence_enum, owner_id)
             .map_err(|e| {
                 McpError::invalid_request(e.to_string(), None)
             })?;
@@ -281,10 +317,11 @@ impl LoaaServer {
         )]))
     }
 
-    #[tool(description = "List all tasks in the system.")]
-    async fn list_tasks(&self) -> Result<CallToolResult, McpError> {
+    #[tool(description = "List all tasks owned by the current user.")]
+    async fn list_tasks(&self, extensions: Extensions) -> Result<CallToolResult, McpError> {
+        let owner_id = self.get_owner_id(&extensions);
         let task_repo = self.task_repo.read().await;
-        let tasks = task_repo.list().await.map_err(|e| {
+        let tasks = task_repo.list_by_owner(&owner_id).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
 
@@ -593,7 +630,17 @@ pub async fn run_stdio_server(server: LoaaServer) -> Result<()> {
 }
 
 /// Run the MCP server with HTTP/SSE transport (for remote access)
-/// If event_sender is provided, the server will emit events for data changes
+///
+/// This server supports multi-user authentication via JWT tokens. Each user's
+/// data is isolated based on the `user_id` extracted from their OAuth token.
+///
+/// Authentication flow:
+/// 1. Client obtains JWT via OAuth flow (web server handles this)
+/// 2. Client includes JWT in Authorization header: `Bearer <token>`
+/// 3. JWT is validated and user_id is extracted from the `sub` claim
+/// 4. Tool operations use this user_id to scope data access
+///
+/// For stdio mode (local CLI), the server's default owner_id is used.
 pub async fn run_http_server(server: LoaaServer, host: &str, port: u16) -> Result<()> {
     use axum::{Router, middleware};
     use rmcp::transport::streamable_http_server::{

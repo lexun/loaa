@@ -35,7 +35,9 @@ pub async fn start_mcp_server(
 
     // Use run_http_server from loaa-mcp library
     // This handles server initialization, routing, and graceful shutdown
-    let server = loaa_mcp::LoaaServer::with_event_sender(&config.database, event_sender).await?;
+    // TODO: Get owner_id from OAuth token when wiring up user context
+    let owner_id = "admin".to_string();
+    let server = loaa_mcp::LoaaServer::with_event_sender(&config.database, event_sender, owner_id).await?;
 
     eprintln!("✓ MCP server initialized");
     eprintln!("Available tools:");

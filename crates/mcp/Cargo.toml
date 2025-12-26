@@ -24,3 +24,4 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 schemars = "1.0"
 axum = "0.8"
 jsonwebtoken = "9.3"
+http = "1.0"

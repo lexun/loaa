@@ -8,7 +8,7 @@ use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
 use serde::{Deserialize, Serialize};
 
 /// JWT Claims structure (must match the web server's Claims)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     /// Subject (user ID)
     pub sub: String,
@@ -22,6 +22,12 @@ pub struct Claims {
     pub iat: i64,
     /// OAuth scopes
     pub scope: String,
+}
+
+/// Extension to hold the authenticated user ID
+#[derive(Clone, Debug)]
+pub struct AuthenticatedUser {
+    pub user_id: String,
 }
 
 /// Helper to create a 401 response with WWW-Authenticate header
@@ -88,12 +94,18 @@ pub async fn validate_jwt(
         &validation
     ) {
         Ok(token_data) => {
-            // Token is valid, proceed with request
+            // Token is valid, inject user_id into request extensions
+            let user_id = token_data.claims.sub.clone();
             eprintln!("✅ JWT valid for user: {}, method: {}, path: {}",
-                token_data.claims.sub,
+                user_id,
                 req.method(),
                 req.uri().path()
             );
+
+            // Insert the authenticated user into request extensions
+            let mut req = req;
+            req.extensions_mut().insert(AuthenticatedUser { user_id });
+
             next.run(req).await
         }
         Err(e) => {

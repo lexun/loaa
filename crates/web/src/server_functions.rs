@@ -41,16 +41,18 @@ async fn get_db() -> Result<Arc<Database>, ServerFnError> {
 
 #[server]
 pub async fn get_kids() -> Result<Vec<KidDto>, ServerFnError> {
+    let owner_id = get_owner_id().await?;
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
-    let kids = kid_repo.list().await
+    let kids = kid_repo.list_by_owner(&owner_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
     Ok(kids.into_iter().map(Into::into).collect())
 }
 
 #[server]
 pub async fn create_kid(name: String) -> Result<KidDto, ServerFnError> {
-    let kid = Kid::new(name)
+    let owner_id = get_owner_id().await?;
+    let kid = Kid::new(name, owner_id)
         .map_err(|e| ServerFnError::new(format!("Validation error: {}", e)))?;
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
@@ -61,9 +63,10 @@ pub async fn create_kid(name: String) -> Result<KidDto, ServerFnError> {
 
 #[server]
 pub async fn get_tasks() -> Result<Vec<TaskDto>, ServerFnError> {
+    let owner_id = get_owner_id().await?;
     let db = get_db().await?;
     let task_repo = TaskRepository::new(db.client.clone());
-    let tasks = task_repo.list().await
+    let tasks = task_repo.list_by_owner(&owner_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list tasks: {}", e)))?;
     Ok(tasks.into_iter().map(Into::into).collect())
 }
@@ -75,7 +78,8 @@ pub async fn create_task(
     value: rust_decimal::Decimal,
     cadence: CadenceDto,
 ) -> Result<TaskDto, ServerFnError> {
-    let task = Task::new(name, description, value, cadence.into())
+    let owner_id = get_owner_id().await?;
+    let task = Task::new(name, description, value, cadence.into(), owner_id)
         .map_err(|e| ServerFnError::new(format!("Validation error: {}", e)))?;
     let db = get_db().await?;
     let task_repo = TaskRepository::new(db.client.clone());
@@ -119,15 +123,16 @@ pub async fn get_ledger(kid_id: UuidDto) -> Result<LedgerDto, ServerFnError> {
 
 #[server]
 pub async fn get_dashboard_data() -> Result<DashboardDataDto, ServerFnError> {
+    let owner_id = get_owner_id().await?;
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
     let task_repo = TaskRepository::new(db.client.clone());
     let ledger_repo = LedgerRepository::new(db.client.clone());
 
-    let kids = kid_repo.list().await
+    let kids = kid_repo.list_by_owner(&owner_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
 
-    let tasks = task_repo.list().await
+    let tasks = task_repo.list_by_owner(&owner_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list tasks: {}", e)))?;
 
     let mut kid_summaries = Vec::new();
@@ -153,11 +158,12 @@ pub async fn get_dashboard_data() -> Result<DashboardDataDto, ServerFnError> {
 
 #[server]
 pub async fn get_recent_activity(limit: usize) -> Result<Vec<LedgerEntryDto>, ServerFnError> {
+    let owner_id = get_owner_id().await?;
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
     let ledger_repo = LedgerRepository::new(db.client.clone());
 
-    let kids = kid_repo.list().await
+    let kids = kid_repo.list_by_owner(&owner_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
 
     let mut all_entries = Vec::new();
@@ -345,6 +351,19 @@ async fn require_admin() -> Result<(), ServerFnError> {
         return Err(ServerFnError::new("Admin access required".to_string()));
     }
     Ok(())
+}
+
+// Helper to get the current owner_id from session
+#[cfg(feature = "ssr")]
+async fn get_owner_id() -> Result<String, ServerFnError> {
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let user_id: Option<String> = session.get("user_id")
+        .await
+        .map_err(|e| ServerFnError::new(format!("Failed to get session: {}", e)))?;
+
+    user_id.ok_or_else(|| ServerFnError::new("Not authenticated".to_string()))
 }
 
 #[server]

@@ -67,6 +67,16 @@ impl KidRepository {
         Ok(records.into_iter().map(|rec| rec.into_kid()).collect())
     }
 
+    pub async fn list_by_owner(&self, owner_id: &str) -> Result<Vec<Kid>> {
+        let records: Vec<KidRecord> = self.db
+            .query("SELECT * FROM kid WHERE owner_id = $owner_id")
+            .bind(("owner_id", owner_id.to_string()))
+            .await?
+            .take(0)?;
+
+        Ok(records.into_iter().map(|rec| rec.into_kid()).collect())
+    }
+
     pub async fn update(&self, kid: Kid) -> Result<Kid> {
         let kid_id = kid.id;
 

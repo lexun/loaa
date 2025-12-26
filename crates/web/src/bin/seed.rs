@@ -1,6 +1,7 @@
 use loaa_core::{
     init_database_with_config, Config, Kid, KidRepository, Task, TaskRepository,
-    Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password
+    Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password,
+    models::AccountType
 };
 use rust_decimal_macros::dec;
 
@@ -24,16 +25,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("👤 Creating admin user...");
     let mut admin_user = User::new("admin".to_string())?;
     admin_user.password_hash = hash_password("admin123")?;
+    admin_user.account_type = AccountType::Admin;
     let created_user = user_repo.create(admin_user).await?;
+    let owner_id = created_user.id.to_string();
     println!("  ✓ Created user: {} (Default password: admin123)", created_user.username);
     println!("  ⚠️  IMPORTANT: Change this password after first login!\n");
 
-    // Create kids
+    // Create kids (owned by admin for seed data)
     println!("👦 Creating kids...");
     let kids = vec![
-        Kid::new("Auri".to_string())?,
-        Kid::new("Zevi".to_string())?,
-        Kid::new("Yasu".to_string())?,
+        Kid::new("Auri".to_string(), owner_id.clone())?,
+        Kid::new("Zevi".to_string(), owner_id.clone())?,
+        Kid::new("Yasu".to_string(), owner_id.clone())?,
     ];
 
     for kid in kids {
@@ -41,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  ✓ Created: {} (ID: {})", created.name, created.id);
     }
 
-    // Create tasks
+    // Create tasks (owned by admin for seed data)
     println!("\n📋 Creating tasks...");
     let tasks = vec![
         Task::new(
@@ -49,48 +52,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Complete daily math lesson".to_string(),
             dec!(2.00),
             Cadence::Daily,
+            owner_id.clone(),
         )?,
         Task::new(
             "Feed Pets".to_string(),
             "Feed and water all pets".to_string(),
             dec!(1.00),
             Cadence::Daily,
+            owner_id.clone(),
         )?,
         Task::new(
             "Typing Practice".to_string(),
             "Practice typing for 10 minutes".to_string(),
             dec!(1.50),
             Cadence::Daily,
+            owner_id.clone(),
         )?,
         Task::new(
             "Math Practice".to_string(),
             "Extra math practice problems".to_string(),
             dec!(1.50),
             Cadence::Daily,
+            owner_id.clone(),
         )?,
         Task::new(
             "Dusting Surfaces".to_string(),
             "Dust all surfaces in common areas".to_string(),
             dec!(2.50),
             Cadence::Weekly,
+            owner_id.clone(),
         )?,
         Task::new(
             "Clean Floors".to_string(),
             "Vacuum and mop floors".to_string(),
             dec!(3.00),
             Cadence::Weekly,
+            owner_id.clone(),
         )?,
         Task::new(
             "Wash Dishes".to_string(),
             "Wash, dry, and put away dishes".to_string(),
             dec!(2.00),
             Cadence::Daily,
+            owner_id.clone(),
         )?,
         Task::new(
             "Clean Room".to_string(),
             "Clean and organize bedroom".to_string(),
             dec!(2.50),
             Cadence::Weekly,
+            owner_id.clone(),
         )?,
     ];
 

@@ -67,6 +67,16 @@ impl TaskRepository {
         Ok(records.into_iter().map(|rec| rec.into_task()).collect())
     }
 
+    pub async fn list_by_owner(&self, owner_id: &str) -> Result<Vec<Task>> {
+        let records: Vec<TaskRecord> = self.db
+            .query("SELECT * FROM task WHERE owner_id = $owner_id")
+            .bind(("owner_id", owner_id.to_string()))
+            .await?
+            .take(0)?;
+
+        Ok(records.into_iter().map(|rec| rec.into_task()).collect())
+    }
+
     pub async fn update(&self, task: Task) -> Result<Task> {
         let task_id = task.id;
 
