@@ -3,28 +3,50 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::error::{Error, Result};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum AccountType {
+    /// Admin account - can only manage other accounts
+    Admin,
+    /// Regular user account - sees dashboard with their own data
+    #[default]
+    User,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     #[serde(skip)]
     pub id: Uuid,
     pub username: String,
     pub password_hash: String,
+    #[serde(default)]
+    pub account_type: AccountType,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl User {
-    /// Create a new user (without password hash - that must be set separately)
+    /// Create a new regular user (without password hash - that must be set separately)
     pub fn new(username: String) -> Result<Self> {
+        Self::new_with_type(username, AccountType::User)
+    }
+
+    /// Create a new user with a specific account type
+    pub fn new_with_type(username: String, account_type: AccountType) -> Result<Self> {
         let user = Self {
             id: Uuid::new_v4(),
             username,
             password_hash: String::new(),  // Must be set before saving
+            account_type,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
         user.validate()?;
         Ok(user)
+    }
+
+    /// Check if this is an admin account
+    pub fn is_admin(&self) -> bool {
+        self.account_type == AccountType::Admin
     }
 
     /// Validate user data

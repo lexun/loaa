@@ -4,7 +4,7 @@ use crate::dto::*;
 #[cfg(feature = "ssr")]
 use loaa_core::{
     Database, KidRepository, TaskRepository, LedgerRepository, UserRepository,
-    init_database_with_config, Config, Uuid, verify_password
+    init_database_with_config, Config, Uuid, verify_password, hash_password
 };
 #[cfg(feature = "ssr")]
 use loaa_core::models::*;
@@ -190,6 +190,11 @@ pub async fn login(username: String, password: String) -> Result<bool, ServerFnE
                 .await
                 .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
 
+            // Store account type as admin
+            session.insert("account_type", "admin".to_string())
+                .await
+                .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
+
             eprintln!("✅ Admin login successful");
             return Ok(true);
         } else {
@@ -198,7 +203,7 @@ pub async fn login(username: String, password: String) -> Result<bool, ServerFnE
         }
     }
 
-    // Regular database users (for future multi-user support)
+    // Regular database users
     let db = get_db().await?;
     let user_repo = UserRepository::new(db.client.clone());
 
@@ -219,6 +224,15 @@ pub async fn login(username: String, password: String) -> Result<bool, ServerFnE
 
         // Store user ID in session
         session.insert("user_id", user.id.to_string())
+            .await
+            .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
+
+        // Store account type in session
+        let account_type_str = match user.account_type {
+            loaa_core::models::AccountType::Admin => "admin",
+            loaa_core::models::AccountType::User => "user",
+        };
+        session.insert("account_type", account_type_str.to_string())
             .await
             .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
 
@@ -300,4 +314,97 @@ pub async fn check_auth() -> Result<bool, ServerFnError> {
         .map_err(|e| ServerFnError::new(format!("Failed to get session: {}", e)))?;
 
     Ok(user_id.is_some())
+}
+
+#[server]
+pub async fn get_account_type() -> Result<AccountTypeDto, ServerFnError> {
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let account_type: Option<String> = session.get("account_type")
+        .await
+        .map_err(|e| ServerFnError::new(format!("Failed to get session: {}", e)))?;
+
+    match account_type.as_deref() {
+        Some("admin") => Ok(AccountTypeDto::Admin),
+        _ => Ok(AccountTypeDto::User),
+    }
+}
+
+// Helper to verify admin access
+#[cfg(feature = "ssr")]
+async fn require_admin() -> Result<(), ServerFnError> {
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let account_type: Option<String> = session.get("account_type")
+        .await
+        .map_err(|e| ServerFnError::new(format!("Failed to get session: {}", e)))?;
+
+    if account_type.as_deref() != Some("admin") {
+        return Err(ServerFnError::new("Admin access required".to_string()));
+    }
+    Ok(())
+}
+
+#[server]
+pub async fn list_accounts() -> Result<Vec<AccountDto>, ServerFnError> {
+    require_admin().await?;
+
+    let db = get_db().await?;
+    let user_repo = UserRepository::new(db.client.clone());
+
+    let users = user_repo.list().await
+        .map_err(|e| ServerFnError::new(format!("Failed to list users: {}", e)))?;
+
+    Ok(users.into_iter().map(Into::into).collect())
+}
+
+#[server]
+pub async fn create_account(username: String, password: String) -> Result<AccountDto, ServerFnError> {
+    require_admin().await?;
+
+    let db = get_db().await?;
+    let user_repo = UserRepository::new(db.client.clone());
+
+    // Check if username already exists
+    if user_repo.get_by_username(&username).await.is_ok() {
+        return Err(ServerFnError::new(format!("Username '{}' already exists", username)));
+    }
+
+    // Create new user
+    let mut user = loaa_core::models::User::new(username)
+        .map_err(|e| ServerFnError::new(format!("Invalid user data: {}", e)))?;
+
+    // Hash password
+    user.password_hash = hash_password(&password)
+        .map_err(|e| ServerFnError::new(format!("Failed to hash password: {}", e)))?;
+
+    // Save to database
+    let created = user_repo.create(user).await
+        .map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
+
+    eprintln!("✅ Created account: {}", created.username);
+    Ok(created.into())
+}
+
+#[server]
+pub async fn delete_account(user_id: String) -> Result<(), ServerFnError> {
+    require_admin().await?;
+
+    let uuid = uuid::Uuid::parse_str(&user_id)
+        .map_err(|e| ServerFnError::new(format!("Invalid user ID: {}", e)))?;
+
+    let db = get_db().await?;
+    let user_repo = UserRepository::new(db.client.clone());
+
+    // Get the user first to log who we're deleting
+    let user = user_repo.get(uuid).await
+        .map_err(|e| ServerFnError::new(format!("User not found: {}", e)))?;
+
+    user_repo.delete(uuid).await
+        .map_err(|e| ServerFnError::new(format!("Failed to delete user: {}", e)))?;
+
+    eprintln!("🗑️ Deleted account: {}", user.username);
+    Ok(())
 }

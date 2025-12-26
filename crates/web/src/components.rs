@@ -10,6 +10,7 @@ use wasm_bindgen::JsCast;
 #[derive(Debug, Clone)]
 pub enum View {
     Login,
+    Admin,
     Dashboard,
     Ledger(UuidDto),
 }
@@ -141,8 +142,15 @@ pub fn Dashboard() -> impl IntoView {
         spawn_local(async move {
             match check_auth().await {
                 Ok(true) => {
-                    // User is authenticated, show dashboard
-                    set_current_view.set(View::Dashboard);
+                    // User is authenticated, check account type
+                    match get_account_type().await {
+                        Ok(AccountTypeDto::Admin) => {
+                            set_current_view.set(View::Admin);
+                        }
+                        _ => {
+                            set_current_view.set(View::Dashboard);
+                        }
+                    }
                 }
                 Ok(false) => {
                     // Not authenticated, show login
@@ -168,6 +176,21 @@ pub fn Dashboard() -> impl IntoView {
             {move || match current_view.get() {
                 View::Login => view! {
                     <Login set_view=set_current_view />
+                }.into_view(),
+                View::Admin => view! {
+                    <div>
+                        <nav class="navbar">
+                            <div class="navbar-brand">"Loa'a Admin"</div>
+                            <button class="logout-btn" on:click=handle_logout>
+                                "Log Out"
+                            </button>
+                        </nav>
+                        <div class="container">
+                            <main>
+                                <AdminPanel />
+                            </main>
+                        </div>
+                    </div>
                 }.into_view(),
                 View::Dashboard => view! {
                     <div>
@@ -508,6 +531,151 @@ pub fn LedgerView(kid_id: UuidDto, set_view: WriteSignal<View>) -> impl IntoView
                     })
                 }}
             </Suspense>
+        </div>
+    }
+}
+
+#[component]
+fn AdminPanel() -> impl IntoView {
+    let (accounts, set_accounts) = create_signal(Vec::<AccountDto>::new());
+    let (is_loaded, set_is_loaded) = create_signal(false);
+    let (error, set_error) = create_signal(Option::<String>::None);
+
+    // Form state for creating new account
+    let (new_username, set_new_username) = create_signal(String::new());
+    let (new_password, set_new_password) = create_signal(String::new());
+    let (creating, set_creating) = create_signal(false);
+
+    // Load accounts on mount
+    create_effect(move |_| {
+        spawn_local(async move {
+            match list_accounts().await {
+                Ok(account_list) => {
+                    set_accounts.set(account_list);
+                    set_is_loaded.set(true);
+                }
+                Err(e) => {
+                    set_error.set(Some(format!("Failed to load accounts: {}", e)));
+                    set_is_loaded.set(true);
+                }
+            }
+        });
+    });
+
+    let on_create = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        set_error.set(None);
+        set_creating.set(true);
+
+        let username = new_username.get();
+        let password = new_password.get();
+
+        spawn_local(async move {
+            match create_account(username, password).await {
+                Ok(new_account) => {
+                    // Add to list
+                    set_accounts.update(|accts| accts.push(new_account));
+                    // Clear form
+                    set_new_username.set(String::new());
+                    set_new_password.set(String::new());
+                }
+                Err(e) => {
+                    set_error.set(Some(format!("Failed to create account: {}", e)));
+                }
+            }
+            set_creating.set(false);
+        });
+    };
+
+    let handle_delete = move |account_id: String, username: String| {
+        spawn_local(async move {
+            match delete_account(account_id.clone()).await {
+                Ok(()) => {
+                    set_accounts.update(|accts| {
+                        accts.retain(|a| a.id != account_id);
+                    });
+                }
+                Err(e) => {
+                    set_error.set(Some(format!("Failed to delete {}: {}", username, e)));
+                }
+            }
+        });
+    };
+
+    view! {
+        <div class="admin-panel">
+            <h1>"Account Management"</h1>
+
+            {move || error.get().map(|err| view! {
+                <div class="error-banner">{err}</div>
+            })}
+
+            <Show
+                when=move || is_loaded.get()
+                fallback=|| view! { <p>"Loading accounts..."</p> }
+            >
+                <section class="create-account-section">
+                    <h2>"Create New Account"</h2>
+                    <form class="create-account-form" on:submit=on_create>
+                        <div class="form-row">
+                            <input
+                                type="text"
+                                placeholder="Username"
+                                required
+                                disabled=move || creating.get()
+                                on:input=move |ev| set_new_username.set(event_target_value(&ev))
+                                prop:value=move || new_username.get()
+                            />
+                            <input
+                                type="password"
+                                placeholder="Password"
+                                required
+                                disabled=move || creating.get()
+                                on:input=move |ev| set_new_password.set(event_target_value(&ev))
+                                prop:value=move || new_password.get()
+                            />
+                            <button type="submit" class="create-btn" disabled=move || creating.get()>
+                                {move || if creating.get() { "Creating..." } else { "Create Account" }}
+                            </button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="accounts-section">
+                    <h2>"Existing Accounts"</h2>
+                    {move || {
+                        let account_list = accounts.get();
+                        if account_list.is_empty() {
+                            view! { <p class="empty-state">"No accounts yet."</p> }.into_view()
+                        } else {
+                            view! {
+                                <div class="accounts-list">
+                                    {account_list.into_iter().map(|account| {
+                                        let account_id = account.id.clone();
+                                        let username = account.username.clone();
+                                        let username_for_delete = account.username.clone();
+                                        let created = account.created_at.format("%Y-%m-%d").to_string();
+                                        view! {
+                                            <div class="account-card">
+                                                <div class="account-info">
+                                                    <span class="account-username">{username}</span>
+                                                    <span class="account-created">"Created: "{created}</span>
+                                                </div>
+                                                <button
+                                                    class="delete-btn"
+                                                    on:click=move |_| handle_delete(account_id.clone(), username_for_delete.clone())
+                                                >
+                                                    "Delete"
+                                                </button>
+                                            </div>
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
+                            }.into_view()
+                        }
+                    }}
+                </section>
+            </Show>
         </div>
     }
 }

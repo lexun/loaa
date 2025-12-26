@@ -79,6 +79,21 @@ pub struct DashboardDataDto {
     pub active_tasks: usize,
 }
 
+// Account DTOs
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AccountTypeDto {
+    Admin,
+    User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountDto {
+    pub id: UuidDto,
+    pub username: String,
+    pub account_type: AccountTypeDto,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 // Conversion functions (only available on server side)
 #[cfg(feature = "ssr")]
 pub mod convert {
@@ -158,6 +173,26 @@ pub mod convert {
                 kid_id: ledger.kid_id.to_string(),
                 balance: ledger.balance,
                 entries: ledger.entries.into_iter().map(Into::into).collect(),
+            }
+        }
+    }
+
+    impl From<AccountType> for AccountTypeDto {
+        fn from(at: AccountType) -> Self {
+            match at {
+                AccountType::Admin => AccountTypeDto::Admin,
+                AccountType::User => AccountTypeDto::User,
+            }
+        }
+    }
+
+    impl From<User> for AccountDto {
+        fn from(user: User) -> Self {
+            AccountDto {
+                id: user.id.to_string(),
+                username: user.username,
+                account_type: user.account_type.into(),
+                created_at: user.created_at,
             }
         }
     }
