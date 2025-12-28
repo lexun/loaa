@@ -12,6 +12,11 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use uuid::Uuid;
 use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey, Algorithm};
 
+/// Helper for serde skip_serializing_if
+fn is_zero(val: &i64) -> bool {
+    *val == 0
+}
+
 /// OAuth 2.1 Authorization Server Metadata (RFC 8414)
 #[derive(Serialize)]
 pub struct AuthorizationServerMetadata {
@@ -46,8 +51,10 @@ pub struct ClientRegistrationRequest {
 #[derive(Debug, Serialize)]
 pub struct ClientRegistrationResponse {
     pub client_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_secret: Option<String>,
     pub client_id_issued_at: i64,
+    #[serde(skip_serializing_if = "is_zero")]
     pub client_secret_expires_at: i64,
     pub redirect_uris: Vec<String>,
     pub client_name: Option<String>,
