@@ -195,22 +195,77 @@ async fn main() -> shuttle_axum::ShuttleAxum {
 
 **Cost:** Free tier available, then ~$20/month
 
-### DigitalOcean Droplet
+### DigitalOcean Droplet + SurrealDB Cloud
 
-Best for: Maximum control and predictable pricing
+Best for: Maximum control with managed database
+
+This is the current production setup. The app runs on a DigitalOcean droplet while the database is hosted on SurrealDB Cloud.
+
+#### 1. Set up SurrealDB Cloud
+
+1. Create an account at https://cloud.surreal.com
+2. Create a new instance (free tier available)
+3. Note your endpoint URL (e.g., `wss://xxx.aws-usw2.surreal.cloud`)
+4. Create a namespace and database via the cloud console:
+   ```sql
+   DEFINE NAMESPACE loaa;
+   USE NS loaa;
+   DEFINE DATABASE main;
+   ```
+
+5. Create a namespace-level user for the application:
+   ```sql
+   USE NS loaa;
+   DEFINE USER loaa_app ON NAMESPACE PASSWORD 'your-secure-password' ROLES OWNER;
+   ```
+
+   **IMPORTANT:** Do NOT specify `DURATION FOR SESSION` - this causes sessions to expire and break the app. The default (`SESSION NONE`) means sessions never expire.
+
+#### 2. Configure the Droplet
+
+Set these environment variables in `/opt/loaa/.env`:
 
 ```bash
-# On your $5/month droplet
-curl -sSf https://install.surrealdb.com | sh
-cargo install cargo-leptos
+# Database configuration (SurrealDB Cloud)
+LOAA_DB_MODE=remote
+LOAA_DB_URL=wss://your-instance.aws-usw2.surreal.cloud
+LOAA_DB_NAMESPACE=loaa
+LOAA_DB_DATABASE=main
+LOAA_DB_USERNAME=loaa_app
+LOAA_DB_PASSWORD=your-secure-password
 
-export LOAA_DB_MODE=embedded
-export LOAA_DB_PATH=/var/lib/loaa/db
+# Server configuration
+LOAA_HOST=0.0.0.0
+LOAA_INCLUDE_MCP=true
+LOAA_MCP_PORT=3001
 
-# Set up systemd services for web and MCP
+# OAuth/JWT configuration
+LOAA_JWT_SECRET=your-jwt-secret
+LOAA_BASE_URL=https://your-domain.com
+
+# Admin password
+LOAA_ADMIN_PASSWORD=your-admin-password
 ```
 
-**Cost:** $5-10/month for droplet
+#### 3. Troubleshooting SurrealDB Cloud
+
+**"Session has expired" error:**
+The namespace user was created with a session duration limit. Fix by recreating the user:
+```sql
+USE NS loaa;
+REMOVE USER loaa_app ON NAMESPACE;
+DEFINE USER loaa_app ON NAMESPACE PASSWORD 'your-password' ROLES OWNER;
+```
+Then restart the Docker container: `docker restart loaa-web`
+
+**Authentication failed (CLI):**
+When using the `surreal` CLI with namespace users, you must specify `--auth-level namespace`:
+```bash
+surreal sql --endpoint "wss://..." --namespace loaa --database main \
+  --username loaa_app --password "..." --auth-level namespace
+```
+
+**Cost:** ~$6/month (droplet) + free tier (SurrealDB Cloud)
 
 ### Render
 
