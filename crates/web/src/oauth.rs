@@ -86,10 +86,15 @@ pub struct ProtectedResourceMetadata {
 pub struct AuthorizeParams {
     pub client_id: String,
     pub redirect_uri: String,
+    #[serde(default = "default_scope")]
     pub scope: String,
     pub state: String,
     pub code_challenge: String,
     pub code_challenge_method: String,
+}
+
+fn default_scope() -> String {
+    "mcp".to_string()
 }
 
 /// Token request parameters (from Claude)
