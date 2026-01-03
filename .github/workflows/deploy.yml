@@ -68,15 +68,26 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           host: ${{ secrets.DROPLET_IP }}
           username: root
           key: ${{ secrets.DROPLET_SSH_KEY }}
-          envs: IMAGE_TAG
+          envs: IMAGE_TAG,ANTHROPIC_API_KEY
           script: |
             # Create app directory if it doesn't exist
             mkdir -p /opt/loaa
             cd /opt/loaa
+
+            # Update ANTHROPIC_API_KEY in .env file if secret is set
+            if [ -n "$ANTHROPIC_API_KEY" ]; then
+              if grep -q "^ANTHROPIC_API_KEY=" .env 2>/dev/null; then
+                sed -i "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY|" .env
+              else
+                echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY" >> .env
+              fi
+              echo "✅ Updated ANTHROPIC_API_KEY in .env"
+            fi
 
             # Login to GitHub Container Registry
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin

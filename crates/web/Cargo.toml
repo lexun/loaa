@@ -64,6 +64,8 @@ serde_json = { version = "1.0", optional = true }
 anyhow = { version = "1.0", optional = true }
 tokio-stream = { version = "0.1", optional = true, features = ["sync"] }
 futures = { version = "0.3", optional = true }
+reqwest = { version = "0.12", features = ["json"], optional = true }
+dotenvy = { version = "0.15", optional = true }
 
 [features]
 hydrate = [
@@ -94,6 +96,8 @@ ssr = [
     "dep:anyhow",
     "dep:tokio-stream",
     "dep:futures",
+    "dep:reqwest",
+    "dep:dotenvy",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",

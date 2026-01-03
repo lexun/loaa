@@ -245,6 +245,9 @@ LOAA_BASE_URL=https://your-domain.com
 
 # Admin password
 LOAA_ADMIN_PASSWORD=your-admin-password
+
+# Claude API for embedded chat (kids can report chores via chat)
+ANTHROPIC_API_KEY=your-anthropic-api-key
 ```
 
 #### 3. Troubleshooting SurrealDB Cloud

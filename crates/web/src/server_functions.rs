@@ -1,4 +1,5 @@
 use leptos::*;
+use server_fn::codec::Json;
 use crate::dto::*;
 
 #[cfg(feature = "ssr")]
@@ -21,9 +22,10 @@ use tower_sessions::Session;
 #[cfg(feature = "ssr")]
 use leptos_axum::extract;
 
-// Helper to get database connection
+// Helper to get database connection - shared across all server functions
+// This uses OnceCell to ensure only one database instance exists
 #[cfg(feature = "ssr")]
-async fn get_db() -> Result<Arc<Database>, ServerFnError> {
+pub async fn get_db() -> Result<Arc<Database>, ServerFnError> {
     static DB: OnceCell<Arc<Database>> = OnceCell::const_new();
     DB.get_or_try_init(|| async {
         // Load configuration from environment
@@ -426,4 +428,54 @@ pub async fn delete_account(user_id: String) -> Result<(), ServerFnError> {
 
     eprintln!("🗑️ Deleted account: {}", user.username);
     Ok(())
+}
+
+/// Send a chat message and get a response from Claude
+#[server(input = Json)]
+pub async fn send_chat_message(
+    message: String,
+    #[server(default)]
+    history: Vec<ChatMessageDto>,
+) -> Result<String, ServerFnError> {
+    use crate::claude::{chat, ChatMessage, MessageContent};
+    use crate::oauth::AppState;
+
+    // Get database connection
+    let db = get_db().await?;
+
+    // Get the owner_id from session
+    let owner_id = get_owner_id().await?;
+
+    // Create a minimal AppState for the chat function
+    // We only need the db field for tool execution
+    let app_state = AppState {
+        leptos_options: leptos::LeptosOptions::default(),
+        oauth_state: std::sync::Arc::new(tokio::sync::RwLock::new(
+            crate::oauth::OAuthState::new()
+        )),
+        base_url: String::new(),
+        jwt_secret: String::new(),
+        db,
+    };
+
+    // Convert history to internal format
+    let mut messages: Vec<ChatMessage> = history
+        .into_iter()
+        .map(|m| ChatMessage {
+            role: m.role,
+            content: MessageContent::Text(m.content),
+        })
+        .collect();
+
+    // Add the new user message
+    messages.push(ChatMessage {
+        role: "user".to_string(),
+        content: MessageContent::Text(message),
+    });
+
+    // Call Claude
+    let response = chat(messages, &app_state, &owner_id).await
+        .map_err(|e| ServerFnError::new(format!("Chat error: {}", e)))?;
+
+    Ok(response)
 }

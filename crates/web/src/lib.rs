@@ -12,6 +12,9 @@ pub mod mcp;
 #[cfg(feature = "ssr")]
 pub mod sse;
 
+#[cfg(feature = "ssr")]
+pub mod claude;
+
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {

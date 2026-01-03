@@ -1,7 +1,6 @@
 use loaa_core::{
     init_database_with_config, Config, Kid, KidRepository, Task, TaskRepository,
     Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password,
-    models::AccountType
 };
 use rust_decimal_macros::dec;
 
@@ -21,22 +20,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kid_repo = KidRepository::new(db.client.clone());
     let task_repo = TaskRepository::new(db.client.clone());
 
-    // Create admin user
-    println!("👤 Creating admin user...");
-    let mut admin_user = User::new("admin".to_string())?;
-    admin_user.password_hash = hash_password("admin123")?;
-    admin_user.account_type = AccountType::Admin;
-    let created_user = user_repo.create(admin_user).await?;
+    // Create a test user account that owns the test data
+    println!("👤 Creating test user account...");
+    let mut test_user = User::new("testuser".to_string())?;
+    test_user.password_hash = hash_password("testuser")?;
+    let created_user = user_repo.create(test_user).await?;
     let owner_id = created_user.id.to_string();
-    println!("  ✓ Created user: {} (Default password: admin123)", created_user.username);
-    println!("  ⚠️  IMPORTANT: Change this password after first login!\n");
+    println!("  ✓ Created: testuser (password: testuser)\n");
 
-    // Create kids (owned by admin for seed data)
+    // Create kids (owned by testuser)
     println!("👦 Creating kids...");
     let kids = vec![
-        Kid::new("Auri".to_string(), owner_id.clone())?,
-        Kid::new("Zevi".to_string(), owner_id.clone())?,
-        Kid::new("Yasu".to_string(), owner_id.clone())?,
+        Kid::new("Jack".to_string(), owner_id.clone())?,
+        Kid::new("Emma".to_string(), owner_id.clone())?,
     ];
 
     for kid in kids {
@@ -44,62 +40,80 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  ✓ Created: {} (ID: {})", created.name, created.id);
     }
 
-    // Create tasks (owned by admin for seed data)
+    // Create tasks (owned by testuser)
+    // Tasks based on production data
     println!("\n📋 Creating tasks...");
     let tasks = vec![
+        // Daily tasks - $0.50
         Task::new(
-            "Math Lesson".to_string(),
-            "Complete daily math lesson".to_string(),
-            dec!(2.00),
+            "Clean litter box".to_string(),
+            "Clean the litter box".to_string(),
+            dec!(0.50),
             Cadence::Daily,
             owner_id.clone(),
         )?,
         Task::new(
-            "Feed Pets".to_string(),
-            "Feed and water all pets".to_string(),
+            "Take out trash".to_string(),
+            "Take out the trash".to_string(),
+            dec!(0.50),
+            Cadence::Daily,
+            owner_id.clone(),
+        )?,
+        Task::new(
+            "Wipe down surfaces".to_string(),
+            "Wipe down surfaces".to_string(),
+            dec!(0.50),
+            Cadence::Daily,
+            owner_id.clone(),
+        )?,
+        Task::new(
+            "Sweep floor".to_string(),
+            "Sweep the floor".to_string(),
+            dec!(0.50),
+            Cadence::Daily,
+            owner_id.clone(),
+        )?,
+        Task::new(
+            "Clean bathroom sink".to_string(),
+            "Clean the bathroom sink".to_string(),
+            dec!(0.50),
+            Cadence::Daily,
+            owner_id.clone(),
+        )?,
+        // Daily tasks - $1.00
+        Task::new(
+            "Wash dishes".to_string(),
+            "Wash a full load of dishes".to_string(),
             dec!(1.00),
             Cadence::Daily,
             owner_id.clone(),
         )?,
         Task::new(
-            "Typing Practice".to_string(),
-            "Practice typing for 10 minutes".to_string(),
-            dec!(1.50),
+            "Vacuum carpets".to_string(),
+            "Vacuum the carpets".to_string(),
+            dec!(1.00),
             Cadence::Daily,
             owner_id.clone(),
         )?,
         Task::new(
-            "Math Practice".to_string(),
-            "Extra math practice problems".to_string(),
-            dec!(1.50),
+            "Mop floor".to_string(),
+            "Mop the floor".to_string(),
+            dec!(1.00),
             Cadence::Daily,
             owner_id.clone(),
         )?,
+        // Weekly tasks
         Task::new(
-            "Dusting Surfaces".to_string(),
-            "Dust all surfaces in common areas".to_string(),
-            dec!(2.50),
+            "Clean bathroom mirror".to_string(),
+            "Clean the bathroom mirror".to_string(),
+            dec!(0.50),
             Cadence::Weekly,
             owner_id.clone(),
         )?,
         Task::new(
-            "Clean Floors".to_string(),
-            "Vacuum and mop floors".to_string(),
-            dec!(3.00),
-            Cadence::Weekly,
-            owner_id.clone(),
-        )?,
-        Task::new(
-            "Wash Dishes".to_string(),
-            "Wash, dry, and put away dishes".to_string(),
-            dec!(2.00),
-            Cadence::Daily,
-            owner_id.clone(),
-        )?,
-        Task::new(
-            "Clean Room".to_string(),
-            "Clean and organize bedroom".to_string(),
-            dec!(2.50),
+            "Clean toilet".to_string(),
+            "Clean the toilet".to_string(),
+            dec!(1.00),
             Cadence::Weekly,
             owner_id.clone(),
         )?,
@@ -124,68 +138,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Found {} kids and {} tasks\n", kids.len(), tasks.len());
 
         // Create some transactions
-        // Auri completes Math Lesson
-        let auri = &kids[0];
-        let math_lesson = tasks.iter().find(|t| t.name == "Math Lesson").unwrap();
+        // Jack completes Wash dishes
+        let jack = &kids[0];
+        let wash_dishes = tasks.iter().find(|t| t.name == "Wash dishes").unwrap();
         let entry = LedgerEntry::earned(
-            auri.id,
-            math_lesson.value,
-            format!("Completed: {}", math_lesson.name),
+            jack.id,
+            wash_dishes.value,
+            format!("Completed: {}", wash_dishes.name),
         );
         ledger_repo.create_entry(entry).await?;
-        println!("✓ {} completed {} (+${})", auri.name, math_lesson.name, math_lesson.value);
+        println!("✓ {} completed {} (+${})", jack.name, wash_dishes.name, wash_dishes.value);
 
-        // Auri completes Feed Pets
-        let feed_pets = tasks.iter().find(|t| t.name == "Feed Pets").unwrap();
+        // Jack completes Clean litter box
+        let litter_box = tasks.iter().find(|t| t.name == "Clean litter box").unwrap();
         let entry = LedgerEntry::earned(
-            auri.id,
-            feed_pets.value,
-            format!("Completed: {}", feed_pets.name),
+            jack.id,
+            litter_box.value,
+            format!("Completed: {}", litter_box.name),
         );
         ledger_repo.create_entry(entry).await?;
-        println!("✓ {} completed {} (+${})", auri.name, feed_pets.name, feed_pets.value);
+        println!("✓ {} completed {} (+${})", jack.name, litter_box.name, litter_box.value);
 
-        // Zevi completes Typing Practice
-        let zevi = &kids[1];
-        let typing = tasks.iter().find(|t| t.name == "Typing Practice").unwrap();
+        // Emma completes Sweep floor
+        let emma = &kids[1];
+        let sweep = tasks.iter().find(|t| t.name == "Sweep floor").unwrap();
         let entry = LedgerEntry::earned(
-            zevi.id,
-            typing.value,
-            format!("Completed: {}", typing.name),
+            emma.id,
+            sweep.value,
+            format!("Completed: {}", sweep.name),
         );
         ledger_repo.create_entry(entry).await?;
-        println!("✓ {} completed {} (+${})", zevi.name, typing.name, typing.value);
+        println!("✓ {} completed {} (+${})", emma.name, sweep.name, sweep.value);
 
-        // Zevi completes Wash Dishes
-        let dishes = tasks.iter().find(|t| t.name == "Wash Dishes").unwrap();
+        // Emma completes Take out trash
+        let trash = tasks.iter().find(|t| t.name == "Take out trash").unwrap();
         let entry = LedgerEntry::earned(
-            zevi.id,
-            dishes.value,
-            format!("Completed: {}", dishes.name),
+            emma.id,
+            trash.value,
+            format!("Completed: {}", trash.name),
         );
         ledger_repo.create_entry(entry).await?;
-        println!("✓ {} completed {} (+${})", zevi.name, dishes.name, dishes.value);
+        println!("✓ {} completed {} (+${})", emma.name, trash.name, trash.value);
 
-        // Yasu completes Clean Room
-        let yasu = &kids[2];
-        let clean_room = tasks.iter().find(|t| t.name == "Clean Room").unwrap();
+        // Emma completes Vacuum carpets
+        let vacuum = tasks.iter().find(|t| t.name == "Vacuum carpets").unwrap();
         let entry = LedgerEntry::earned(
-            yasu.id,
-            clean_room.value,
-            format!("Completed: {}", clean_room.name),
+            emma.id,
+            vacuum.value,
+            format!("Completed: {}", vacuum.name),
         );
         ledger_repo.create_entry(entry).await?;
-        println!("✓ {} completed {} (+${})", yasu.name, clean_room.name, clean_room.value);
-
-        // Yasu completes Math Practice
-        let math_practice = tasks.iter().find(|t| t.name == "Math Practice").unwrap();
-        let entry = LedgerEntry::earned(
-            yasu.id,
-            math_practice.value,
-            format!("Completed: {}", math_practice.name),
-        );
-        ledger_repo.create_entry(entry).await?;
-        println!("✓ {} completed {} (+${})", yasu.name, math_practice.name, math_practice.value);
+        println!("✓ {} completed {} (+${})", emma.name, vacuum.name, vacuum.value);
 
         // Print final balances
         println!("\n💰 Final Balances:");

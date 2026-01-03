@@ -1,6 +1,9 @@
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
+    // Load .env file before anything else
+    dotenvy::dotenv().ok();
+
     use axum::Router;
     use axum::routing::{get, post};
     use leptos::*;
@@ -16,6 +19,8 @@ async fn main() {
         AppState,
     };
     use loaa_web::sse::sse_handler;
+    use loaa_web::claude::chat_handler;
+    use loaa_web::server_functions::get_db;
     use loaa_core::config::Config;
     use loaa_core::create_event_channel;
     use tower_http::services::ServeDir;
@@ -30,6 +35,11 @@ async fn main() {
 
     // Load configuration from environment
     let config = Config::from_env();
+
+    // Get shared database instance (same OnceCell used by server functions)
+    let db = get_db()
+        .await
+        .expect("Failed to initialize database");
 
     // Override server address from environment config
     let addr: std::net::SocketAddr = format!("{}:{}", config.server.host, config.server.port)
@@ -89,6 +99,7 @@ async fn main() {
         oauth_state: Arc::new(RwLock::new(OAuthState::new())),
         base_url,
         jwt_secret,
+        db,
     };
 
     // Configure CORS for OAuth endpoints
@@ -115,10 +126,17 @@ async fn main() {
         .route("/events", get(sse_handler))
         .with_state(event_sender);
 
+    // Create chat router with app state
+    let chat_router = Router::new()
+        .route("/chat", post(chat_handler))
+        .with_state(app_state.clone());
+
     // Serve static files BEFORE leptos routes so they take precedence
     let app = Router::new()
         // SSE endpoint for real-time updates (nested under /api)
         .nest("/api", sse_router)
+        // Chat endpoint for embedded Claude chat
+        .nest("/api", chat_router)
         // OAuth discovery endpoints (with CORS)
         .route(
             "/.well-known/oauth-authorization-server",

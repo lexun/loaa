@@ -79,6 +79,13 @@ pub struct DashboardDataDto {
     pub active_tasks: usize,
 }
 
+// Chat message DTO
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessageDto {
+    pub role: String,
+    pub content: String,
+}
+
 // Account DTOs
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AccountTypeDto {

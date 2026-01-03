@@ -311,6 +311,7 @@ pub struct AppState {
     pub oauth_state: SharedOAuthState,
     pub base_url: String,
     pub jwt_secret: String,
+    pub db: std::sync::Arc<loaa_core::db::Database>,
 }
 
 // Implement FromRef so Leptos can extract LeptosOptions from AppState

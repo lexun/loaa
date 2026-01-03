@@ -75,6 +75,24 @@ logs service='':
 test:
     cargo test
 
+# Start dev server with fresh database
+[group('development')]
+dev:
+    #!/usr/bin/env bash
+    export LOAA_DB_MODE="${LOAA_DB_MODE:-embedded}"
+    export LOAA_DB_PATH="${LOAA_DB_PATH:-./data/loaa.db}"
+    echo "🧹 Cleaning database..."
+    rm -rf "$LOAA_DB_PATH"
+    echo "🌱 Seeding database..."
+    cargo run -p loaa-web --bin seed --features ssr -- --with-transactions
+    echo "🚀 Starting dev server..."
+    cargo leptos watch
+
+# Start dev server (keeps existing database)
+[group('development')]
+watch:
+    cargo leptos watch
+
 # Reset database (clean + seed)
 [group('database')]
 reset:

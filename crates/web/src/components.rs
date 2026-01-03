@@ -381,6 +381,9 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                         }
                     }}
                 </section>
+
+                // Floating chat widget for kids
+                <ChatWidget />
             </div>
         </Show>
     }
@@ -531,6 +534,141 @@ pub fn LedgerView(kid_id: UuidDto, set_view: WriteSignal<View>) -> impl IntoView
                     })
                 }}
             </Suspense>
+        </div>
+    }
+}
+
+/// Floating chat widget for kids to report completed tasks
+#[component]
+fn ChatWidget() -> impl IntoView {
+    let (is_open, set_is_open) = create_signal(false);
+    let (messages, set_messages) = create_signal(Vec::<ChatMessageDto>::new());
+    let (input_value, set_input_value) = create_signal(String::new());
+    let (is_sending, set_is_sending) = create_signal(false);
+
+    let on_send = move |_| {
+        let message = input_value.get().trim().to_string();
+        if message.is_empty() || is_sending.get() {
+            return;
+        }
+
+        set_is_sending.set(true);
+        let history = messages.get();
+
+        // Add user message to display immediately
+        set_messages.update(|msgs| {
+            msgs.push(ChatMessageDto {
+                role: "user".to_string(),
+                content: message.clone(),
+            });
+        });
+        set_input_value.set(String::new());
+
+        spawn_local(async move {
+            match send_chat_message(message, history).await {
+                Ok(response) => {
+                    set_messages.update(|msgs| {
+                        msgs.push(ChatMessageDto {
+                            role: "assistant".to_string(),
+                            content: response,
+                        });
+                    });
+                }
+                Err(e) => {
+                    set_messages.update(|msgs| {
+                        msgs.push(ChatMessageDto {
+                            role: "assistant".to_string(),
+                            content: format!("Oops! Something went wrong: {}", e),
+                        });
+                    });
+                }
+            }
+            set_is_sending.set(false);
+        });
+    };
+
+    let on_key_press = move |ev: leptos::ev::KeyboardEvent| {
+        if ev.key() == "Enter" && !ev.shift_key() {
+            ev.prevent_default();
+            on_send(());
+        }
+    };
+
+    view! {
+        <div class="chat-widget">
+            // Chat toggle button
+            <button
+                class="chat-toggle"
+                class:open=move || is_open.get()
+                on:click=move |_| set_is_open.update(|v| *v = !*v)
+            >
+                {move || if is_open.get() { "✕" } else { "💬" }}
+            </button>
+
+            // Chat window
+            <Show when=move || is_open.get()>
+                <div class="chat-window">
+                    <div class="chat-header">
+                        <h3>"Hi! Need help?"</h3>
+                    </div>
+
+                    <div class="chat-messages">
+                        {move || {
+                            let msg_list = messages.get();
+                            if msg_list.is_empty() {
+                                view! {
+                                    <div class="chat-empty">
+                                        <p>"Tell me what chore you finished!"</p>
+                                        <p class="hint">"e.g., \"I did the dishes\" or \"I fed the cat\""</p>
+                                    </div>
+                                }.into_view()
+                            } else {
+                                view! {
+                                    <div class="messages-list">
+                                        {msg_list.into_iter().map(|msg| {
+                                            let role_class = if msg.role == "user" { "user" } else { "assistant" };
+                                            view! {
+                                                <div class=format!("message {}", role_class)>
+                                                    {msg.content}
+                                                </div>
+                                            }
+                                        }).collect::<Vec<_>>()}
+                                        {move || if is_sending.get() {
+                                            view! {
+                                                <div class="message assistant typing">
+                                                    <span class="dot"></span>
+                                                    <span class="dot"></span>
+                                                    <span class="dot"></span>
+                                                </div>
+                                            }.into_view()
+                                        } else {
+                                            view! {}.into_view()
+                                        }}
+                                    </div>
+                                }.into_view()
+                            }
+                        }}
+                    </div>
+
+                    <div class="chat-input">
+                        <input
+                            type="text"
+                            placeholder="What did you do?"
+                            disabled=move || is_sending.get()
+                            on:input=move |ev| set_input_value.set(event_target_value(&ev))
+                            on:keypress=on_key_press
+                            prop:value=move || input_value.get()
+                        />
+                        <button
+                            class="send-btn"
+                            disabled=move || is_sending.get() || input_value.get().trim().is_empty()
+                            on:click=move |_| on_send(())
+                        >
+                            "→"
+                        </button>
+                    </div>
+                </div>
+            </Show>
         </div>
     }
 }
