@@ -49,14 +49,30 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
                             let _ = window.location().set_href(&oauth_url);
                         }
                         Ok(None) => {
-                            leptos::logging::log!("No pending OAuth, going to dashboard");
-                            // No pending OAuth, go to dashboard
-                            set_view.set(View::Dashboard);
+                            leptos::logging::log!("No pending OAuth, checking account type");
+                            // No pending OAuth, check account type to determine view
+                            match get_account_type().await {
+                                Ok(AccountTypeDto::Admin) => {
+                                    leptos::logging::log!("Admin user, going to admin view");
+                                    set_view.set(View::Admin);
+                                }
+                                _ => {
+                                    leptos::logging::log!("Regular user, going to dashboard");
+                                    set_view.set(View::Dashboard);
+                                }
+                            }
                         }
                         Err(e) => {
                             leptos::logging::log!("Error checking OAuth: {}", e);
-                            // Error checking OAuth, default to dashboard
-                            set_view.set(View::Dashboard);
+                            // Error checking OAuth, check account type
+                            match get_account_type().await {
+                                Ok(AccountTypeDto::Admin) => {
+                                    set_view.set(View::Admin);
+                                }
+                                _ => {
+                                    set_view.set(View::Dashboard);
+                                }
+                            }
                         }
                     }
                 }
