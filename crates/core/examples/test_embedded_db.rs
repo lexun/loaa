@@ -12,6 +12,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mode: DatabaseMode::Embedded,
         url: None,
         path: Some(PathBuf::from("./data/test_embedded.db")),
+        namespace: None,
+        database: None,
+        username: None,
+        password: None,
+        token: None,
     };
 
     // Initialize database

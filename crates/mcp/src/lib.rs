@@ -63,6 +63,9 @@ struct CreateTaskParams {
     value: String,
     #[schemars(description = "Cadence: 'daily', 'weekly', or 'onetime'")]
     cadence: String,
+    #[schemars(description = "Whether multiple kids can complete this task and each earn full credit (default: false)")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    collaborative: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -81,6 +84,9 @@ struct UpdateTaskParams {
     #[schemars(description = "New cadence (optional)")]
     #[serde(skip_serializing_if = "Option::is_none")]
     cadence: Option<String>,
+    #[schemars(description = "Whether multiple kids can complete this task and each earn full credit (optional)")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    collaborative: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -282,10 +288,15 @@ impl LoaaServer {
             }
         };
 
-        let task = Task::new(params.name, params.description, value_dec, cadence_enum, owner_id)
+        let mut task = Task::new(params.name, params.description, value_dec, cadence_enum, owner_id)
             .map_err(|e| {
                 McpError::invalid_request(e.to_string(), None)
             })?;
+
+        // Set collaborative flag if provided
+        if let Some(collaborative) = params.collaborative {
+            task.collaborative = collaborative;
+        }
 
         let task_repo = self.task_repo.read().await;
         let created = task_repo.create(task).await.map_err(|e| {
@@ -308,6 +319,7 @@ impl LoaaServer {
                 Cadence::Weekly => "weekly",
                 Cadence::OneTime => "onetime"
             },
+            "collaborative": created.collaborative,
             "created_at": created.created_at.to_rfc3339(),
             "needs_reset": created.needs_reset()
         });
@@ -321,25 +333,45 @@ impl LoaaServer {
     async fn list_tasks(&self, extensions: Extensions) -> Result<CallToolResult, McpError> {
         let owner_id = self.get_owner_id(&extensions);
         let task_repo = self.task_repo.read().await;
+        let kid_repo = self.kid_repo.read().await;
         let tasks = task_repo.list_by_owner(&owner_id).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
         })?;
+        let kids = kid_repo.list_by_owner(&owner_id).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
+        })?;
+
+        // Build a map of kid IDs to names for resolving completed_by
+        let kid_names: std::collections::HashMap<Uuid, String> = kids
+            .iter()
+            .map(|k| (k.id, k.name.clone()))
+            .collect();
 
         let response = json!({
-            "tasks": tasks.iter().map(|t| json!({
-                "id": t.id.to_string(),
-                "name": t.name,
-                "description": t.description,
-                "value": t.value.to_string(),
-                "cadence": match t.cadence {
-                    Cadence::Daily => "daily",
-                    Cadence::Weekly => "weekly",
-                    Cadence::OneTime => "onetime"
-                },
-                "created_at": t.created_at.to_rfc3339(),
-                "last_reset": t.last_reset.to_rfc3339(),
-                "needs_reset": t.needs_reset()
-            })).collect::<Vec<_>>()
+            "tasks": tasks.iter().map(|t| {
+                // Resolve completed_by UUIDs to kid names
+                let completed_by_names: Vec<String> = t.completed_by
+                    .iter()
+                    .filter_map(|id| kid_names.get(id).cloned())
+                    .collect();
+
+                json!({
+                    "id": t.id.to_string(),
+                    "name": t.name,
+                    "description": t.description,
+                    "value": t.value.to_string(),
+                    "cadence": match t.cadence {
+                        Cadence::Daily => "daily",
+                        Cadence::Weekly => "weekly",
+                        Cadence::OneTime => "onetime"
+                    },
+                    "collaborative": t.collaborative,
+                    "completed_by": completed_by_names,
+                    "created_at": t.created_at.to_rfc3339(),
+                    "last_reset": t.last_reset.to_rfc3339(),
+                    "needs_reset": t.needs_reset()
+                })
+            }).collect::<Vec<_>>()
         });
 
         Ok(CallToolResult::success(vec![Content::text(
@@ -385,6 +417,9 @@ impl LoaaServer {
                 }
             };
         }
+        if let Some(collaborative) = params.collaborative {
+            task.collaborative = collaborative;
+        }
 
         let updated = task_repo.update(task).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
@@ -406,6 +441,7 @@ impl LoaaServer {
                 Cadence::Weekly => "weekly",
                 Cadence::OneTime => "onetime"
             },
+            "collaborative": updated.collaborative,
             "needs_reset": updated.needs_reset()
         });
 

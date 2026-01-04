@@ -120,12 +120,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
     ];
 
+    // Some tasks that work well as collaborative (multiple kids can each earn credit)
+    let collaborative_tasks = vec![
+        Task::new_collaborative(
+            "Help with yard work".to_string(),
+            "Help with yard work - all helpers get credit".to_string(),
+            dec!(2.00),
+            Cadence::Weekly,
+            owner_id.clone(),
+        )?,
+        Task::new_collaborative(
+            "Clean the car".to_string(),
+            "Clean the car together - all helpers get credit".to_string(),
+            dec!(1.50),
+            Cadence::Weekly,
+            owner_id.clone(),
+        )?,
+    ];
+
     // Set last_reset to 2 days ago so tasks are available to complete
     let two_days_ago = Utc::now() - Duration::days(2);
     for mut task in tasks {
         task.last_reset = two_days_ago;
         let created = task_repo.create(task.clone()).await?;
         println!("  ✓ Created: {} - ${} ({:?})", created.name, created.value, created.cadence);
+    }
+
+    // Create collaborative tasks
+    println!("\n🤝 Creating collaborative tasks...");
+    for mut task in collaborative_tasks {
+        task.last_reset = two_days_ago;
+        let created = task_repo.create(task.clone()).await?;
+        println!("  ✓ Created: {} - ${} ({:?}) [collaborative]", created.name, created.value, created.cadence);
     }
 
     println!("\n✅ Database seeded successfully!");

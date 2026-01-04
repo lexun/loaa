@@ -163,21 +163,40 @@ async fn execute_tool(
         }
         "list_tasks" => {
             let task_repo = TaskRepository::new(state.db.client.clone());
+            let kid_repo = KidRepository::new(state.db.client.clone());
             let tasks = task_repo.list_by_owner(owner_id).await?;
+            let kids = kid_repo.list_by_owner(owner_id).await?;
+
+            // Build a map of kid IDs to names for resolving completed_by
+            let kid_names: std::collections::HashMap<uuid::Uuid, String> = kids
+                .iter()
+                .map(|k| (k.id, k.name.clone()))
+                .collect();
+
             let result: Vec<Value> = tasks
                 .iter()
-                .map(|t| json!({
-                    "id": t.id.to_string(),
-                    "name": t.name,
-                    "description": t.description,
-                    "value": t.value.to_string(),
-                    "cadence": match t.cadence {
-                        Cadence::Daily => "daily",
-                        Cadence::Weekly => "weekly",
-                        Cadence::OneTime => "one-time",
-                    },
-                    "available": t.needs_reset() || matches!(t.cadence, Cadence::OneTime)
-                }))
+                .map(|t| {
+                    // Resolve completed_by UUIDs to kid names
+                    let completed_by_names: Vec<String> = t.completed_by
+                        .iter()
+                        .filter_map(|id| kid_names.get(id).cloned())
+                        .collect();
+
+                    json!({
+                        "id": t.id.to_string(),
+                        "name": t.name,
+                        "description": t.description,
+                        "value": t.value.to_string(),
+                        "cadence": match t.cadence {
+                            Cadence::Daily => "daily",
+                            Cadence::Weekly => "weekly",
+                            Cadence::OneTime => "one-time",
+                        },
+                        "collaborative": t.collaborative,
+                        "completed_by": completed_by_names,
+                        "needs_reset": t.needs_reset()
+                    })
+                })
                 .collect();
             Ok(serde_json::to_string_pretty(&result)?)
         }

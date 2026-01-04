@@ -13,6 +13,9 @@ pub enum Error {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    #[error("Task not available: {0}")]
+    TaskNotAvailable(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 
