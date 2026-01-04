@@ -7,6 +7,91 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "hydrate")]
 use wasm_bindgen::JsCast;
 
+/// Convert simple markdown to HTML for chat messages
+/// Handles: **bold**, *italic*, `code`, ```code blocks```, and newlines
+fn markdown_to_html(text: &str) -> String {
+    let mut result = text.to_string();
+
+    // Escape HTML entities first
+    result = result
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+
+    // Bold: **text** -> <strong>text</strong>
+    while let Some(start) = result.find("**") {
+        if let Some(end) = result[start + 2..].find("**") {
+            let content = &result[start + 2..start + 2 + end];
+            // Only convert if there's actual content
+            if !content.is_empty() {
+                let before = &result[..start];
+                let after = &result[start + 2 + end + 2..];
+                result = format!("{}<strong>{}</strong>{}", before, content, after);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // Code blocks: ```code``` -> <pre><code>code</code></pre>
+    // Process BEFORE inline code
+    while let Some(start) = result.find("```") {
+        if let Some(end) = result[start + 3..].find("```") {
+            let content = &result[start + 3..start + 3 + end];
+            let before = &result[..start];
+            let after = &result[start + 3 + end + 3..];
+            // Trim leading/trailing newlines from code block content
+            let trimmed = content.trim_matches(|c| c == '\n' || c == '\r');
+            result = format!("{}<pre><code>{}</code></pre>{}", before, trimmed, after);
+        } else {
+            break;
+        }
+    }
+
+    // Inline code: `code` -> <code>code</code>
+    // Process BEFORE italics to avoid conflicts
+    while let Some(start) = result.find('`') {
+        if let Some(end) = result[start + 1..].find('`') {
+            let content = &result[start + 1..start + 1 + end];
+            // Only convert if there's actual content
+            if !content.is_empty() {
+                let before = &result[..start];
+                let after = &result[start + 1 + end + 1..];
+                result = format!("{}<code>{}</code>{}", before, content, after);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // Italic: *text* -> <em>text</em>
+    // Must come after bold processing since ** contains *
+    while let Some(start) = result.find('*') {
+        if let Some(end) = result[start + 1..].find('*') {
+            let content = &result[start + 1..start + 1 + end];
+            // Only convert if there's actual content and not just spaces
+            if !content.is_empty() && content.trim().len() == content.len() {
+                let before = &result[..start];
+                let after = &result[start + 1 + end + 1..];
+                result = format!("{}<em>{}</em>{}", before, content, after);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // Newlines to <br>
+    result = result.replace('\n', "<br>");
+
+    result
+}
+
 #[derive(Debug, Clone)]
 pub enum View {
     Login,
@@ -221,6 +306,8 @@ pub fn Dashboard() -> impl IntoView {
                                 <DashboardView set_view=set_current_view />
                             </main>
                         </div>
+                        // Chat widget at root level for proper fixed positioning
+                        <ChatWidget />
                     </div>
                 }.into_view(),
                 View::Ledger(kid_id) => view! {
@@ -397,9 +484,6 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                         }
                     }}
                 </section>
-
-                // Floating chat widget for kids
-                <ChatWidget />
             </div>
         </Show>
     }
@@ -643,9 +727,17 @@ fn ChatWidget() -> impl IntoView {
                                     <div class="messages-list">
                                         {msg_list.into_iter().map(|msg| {
                                             let role_class = if msg.role == "user" { "user" } else { "assistant" };
+                                            let html_content = if msg.role == "assistant" {
+                                                markdown_to_html(&msg.content)
+                                            } else {
+                                                // For user messages, just escape HTML
+                                                msg.content
+                                                    .replace('&', "&amp;")
+                                                    .replace('<', "&lt;")
+                                                    .replace('>', "&gt;")
+                                            };
                                             view! {
-                                                <div class=format!("message {}", role_class)>
-                                                    {msg.content}
+                                                <div class=format!("message {}", role_class) inner_html=html_content>
                                                 </div>
                                             }
                                         }).collect::<Vec<_>>()}

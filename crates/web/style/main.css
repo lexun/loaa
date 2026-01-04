@@ -847,6 +847,46 @@ li {
     border-bottom-left-radius: 4px;
 }
 
+/* Markdown styling in messages */
+.message strong {
+    font-weight: 600;
+}
+
+.message em {
+    font-style: italic;
+}
+
+.message code {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+.message.user code {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.message pre {
+    margin: 8px 0;
+    padding: 0;
+    background: transparent;
+}
+
+.message pre code {
+    display: block;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.message.user pre code {
+    background: rgba(255, 255, 255, 0.15);
+}
+
 .message.typing {
     display: flex;
     gap: 4px;
