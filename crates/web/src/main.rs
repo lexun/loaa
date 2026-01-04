@@ -20,7 +20,7 @@ async fn main() {
     };
     use loaa_web::sse::sse_handler;
     use loaa_web::claude::chat_handler;
-    use loaa_web::server_functions::get_db;
+    use loaa_web::server_functions::{get_db, set_event_sender};
     use loaa_core::config::Config;
     use loaa_core::create_event_channel;
     use tower_http::services::ServeDir;
@@ -70,6 +70,8 @@ async fn main() {
 
     // Create event channel for SSE real-time updates
     let event_sender = create_event_channel(100);
+    // Make event sender available to server functions for chat tool execution
+    set_event_sender(event_sender.clone());
     println!("📺 SSE event channel created");
 
     if include_mcp {
@@ -100,6 +102,7 @@ async fn main() {
         base_url,
         jwt_secret,
         db,
+        event_sender: Some(event_sender.clone()),
     };
 
     // Configure CORS for OAuth endpoints

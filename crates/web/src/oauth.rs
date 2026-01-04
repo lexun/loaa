@@ -312,6 +312,8 @@ pub struct AppState {
     pub base_url: String,
     pub jwt_secret: String,
     pub db: std::sync::Arc<loaa_core::db::Database>,
+    /// Optional event sender for SSE real-time updates
+    pub event_sender: Option<loaa_core::EventSender>,
 }
 
 // Implement FromRef so Leptos can extract LeptosOptions from AppState

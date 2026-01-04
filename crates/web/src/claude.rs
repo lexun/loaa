@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 
 use crate::oauth::AppState;
 use loaa_core::db::{KidRepository, TaskRepository, LedgerRepository};
+use loaa_core::events::{DataEvent, broadcast_event};
 use loaa_core::models::Cadence;
 use loaa_core::workflows::TaskCompletionWorkflow;
 
@@ -198,6 +199,15 @@ async fn execute_tool(
             );
 
             let entry = workflow.complete_task(task_uuid, kid_uuid).await?;
+
+            // Broadcast SSE event for live dashboard updates
+            if let Some(ref tx) = state.event_sender {
+                broadcast_event(tx, DataEvent::TaskCompleted {
+                    kid_id: kid_uuid.to_string(),
+                    task_id: task_uuid.to_string(),
+                    amount: entry.amount.to_string(),
+                });
+            }
 
             // Get updated balance
             let ledger_repo = LedgerRepository::new(state.db.client.clone());

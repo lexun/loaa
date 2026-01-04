@@ -5,7 +5,8 @@ use crate::dto::*;
 #[cfg(feature = "ssr")]
 use loaa_core::{
     Database, KidRepository, TaskRepository, LedgerRepository, UserRepository,
-    init_database_with_config, Config, Uuid, verify_password, hash_password
+    init_database_with_config, Config, Uuid, verify_password, hash_password,
+    EventSender,
 };
 #[cfg(feature = "ssr")]
 use loaa_core::models::*;
@@ -21,6 +22,25 @@ use std::str::FromStr;
 use tower_sessions::Session;
 #[cfg(feature = "ssr")]
 use leptos_axum::extract;
+#[cfg(feature = "ssr")]
+use std::sync::OnceLock;
+
+// Global event sender for SSE broadcasts
+// This is set once during server initialization and read by server functions
+#[cfg(feature = "ssr")]
+static EVENT_SENDER: OnceLock<EventSender> = OnceLock::new();
+
+/// Set the global event sender (called from main.rs during initialization)
+#[cfg(feature = "ssr")]
+pub fn set_event_sender(sender: EventSender) {
+    let _ = EVENT_SENDER.set(sender);
+}
+
+/// Get the global event sender for SSE broadcasts
+#[cfg(feature = "ssr")]
+pub fn get_event_sender() -> Option<EventSender> {
+    EVENT_SENDER.get().cloned()
+}
 
 // Helper to get database connection - shared across all server functions
 // This uses OnceCell to ensure only one database instance exists
@@ -447,7 +467,7 @@ pub async fn send_chat_message(
     let owner_id = get_owner_id().await?;
 
     // Create a minimal AppState for the chat function
-    // We only need the db field for tool execution
+    // We only need the db and event_sender fields for tool execution
     let app_state = AppState {
         leptos_options: leptos::LeptosOptions::default(),
         oauth_state: std::sync::Arc::new(tokio::sync::RwLock::new(
@@ -456,6 +476,7 @@ pub async fn send_chat_message(
         base_url: String::new(),
         jwt_secret: String::new(),
         db,
+        event_sender: get_event_sender(),
     };
 
     // Convert history to internal format

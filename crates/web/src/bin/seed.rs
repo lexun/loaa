@@ -3,6 +3,7 @@ use loaa_core::{
     Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password,
 };
 use rust_decimal_macros::dec;
+use chrono::{Duration, Utc};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -119,7 +120,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
     ];
 
-    for task in tasks {
+    // Set last_reset to 2 days ago so tasks are available to complete
+    let two_days_ago = Utc::now() - Duration::days(2);
+    for mut task in tasks {
+        task.last_reset = two_days_ago;
         let created = task_repo.create(task.clone()).await?;
         println!("  ✓ Created: {} - ${} ({:?})", created.name, created.value, created.cadence);
     }
