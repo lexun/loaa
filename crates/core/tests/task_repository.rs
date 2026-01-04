@@ -1,4 +1,5 @@
-use loaa_core::db::{init_database, TaskRepository};
+use loaa_core::db::{init_database_with_config, TaskRepository};
+use loaa_core::config::{DatabaseConfig, DatabaseMode};
 use loaa_core::models::{Task, Cadence};
 use rust_decimal_macros::dec;
 use tempfile::TempDir;
@@ -7,9 +8,19 @@ use uuid::Uuid;
 async fn setup_test_db() -> (TempDir, TaskRepository) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
-    let database = init_database(db_path.to_str().unwrap())
+    let config = DatabaseConfig {
+        mode: DatabaseMode::Embedded,
+        url: None,
+        path: Some(db_path),
+        namespace: None,
+        database: None,
+        username: None,
+        password: None,
+        token: None,
+    };
+    let database = init_database_with_config(&config)
         .await
-        .expect("Failed to initialize database");
+        .expect("Failed to initialize embedded database");
     let repo = TaskRepository::new(database.client.clone());
     (temp_dir, repo)
 }
