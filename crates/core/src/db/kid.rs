@@ -77,6 +77,16 @@ impl KidRepository {
         Ok(records.into_iter().map(|rec| rec.into_kid()).collect())
     }
 
+    pub async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Kid>> {
+        let records: Vec<KidRecord> = self.db
+            .query("SELECT * FROM kid WHERE account_id = $account_id")
+            .bind(("account_id", account_id.to_string()))
+            .await?
+            .take(0)?;
+
+        Ok(records.into_iter().map(|rec| rec.into_kid()).collect())
+    }
+
     pub async fn update(&self, kid: Kid) -> Result<Kid> {
         let kid_id = kid.id;
 

@@ -12,6 +12,8 @@ pub struct Task {
     pub description: String,
     pub value: Decimal,
     pub cadence: Cadence,
+    /// Account this task belongs to
+    pub account_id: Uuid,
     /// Owner of this task (user_id as string, or "admin" for admin-created)
     #[serde(default)]
     pub owner_id: String,
@@ -34,7 +36,7 @@ pub enum Cadence {
 }
 
 impl Task {
-    pub fn new(name: String, description: String, value: Decimal, cadence: Cadence, owner_id: String) -> Result<Self> {
+    pub fn new(name: String, description: String, value: Decimal, cadence: Cadence, account_id: Uuid, owner_id: String) -> Result<Self> {
         let now = Utc::now();
         let task = Self {
             id: Uuid::new_v4(),
@@ -42,6 +44,7 @@ impl Task {
             description: description.trim().to_string(),
             value,
             cadence,
+            account_id,
             owner_id,
             collaborative: false,
             completed_by: Vec::new(),
@@ -54,8 +57,8 @@ impl Task {
     }
 
     /// Create a new collaborative task where multiple kids can each earn full credit
-    pub fn new_collaborative(name: String, description: String, value: Decimal, cadence: Cadence, owner_id: String) -> Result<Self> {
-        let mut task = Self::new(name, description, value, cadence, owner_id)?;
+    pub fn new_collaborative(name: String, description: String, value: Decimal, cadence: Cadence, account_id: Uuid, owner_id: String) -> Result<Self> {
+        let mut task = Self::new(name, description, value, cadence, account_id, owner_id)?;
         task.collaborative = true;
         Ok(task)
     }
@@ -121,17 +124,24 @@ mod tests {
     use super::*;
     use rust_decimal_macros::dec;
 
+    fn test_account_id() -> Uuid {
+        Uuid::new_v4()
+    }
+
     #[test]
     fn test_task_creation() {
+        let account_id = test_account_id();
         let task = Task::new(
             "Take out trash".to_string(),
             "Empty all trash bins".to_string(),
             dec!(1.50),
             Cadence::Daily,
+            account_id,
             "test-owner".to_string(),
         ).unwrap();
         assert_eq!(task.name, "Take out trash");
         assert_eq!(task.value, dec!(1.50));
+        assert_eq!(task.account_id, account_id);
         assert_eq!(task.owner_id, "test-owner");
     }
 
@@ -142,6 +152,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::Daily,
+            test_account_id(),
             "test-owner".to_string(),
         );
         assert!(result.is_err());
@@ -154,6 +165,7 @@ mod tests {
             "".to_string(),
             dec!(0),
             Cadence::Daily,
+            test_account_id(),
             "test-owner".to_string(),
         );
         assert!(result.is_err());
@@ -166,6 +178,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::Daily,
+            test_account_id(),
             "test-owner".to_string(),
         ).unwrap();
         task.last_reset = Utc::now() - Duration::days(2);
@@ -179,6 +192,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::OneTime,
+            test_account_id(),
             "test-owner".to_string(),
         ).unwrap();
         assert!(!task.needs_reset());
@@ -191,6 +205,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::Daily,
+            test_account_id(),
             "test-owner".to_string(),
         ).unwrap();
 
@@ -217,6 +232,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::Daily,
+            test_account_id(),
             "test-owner".to_string(),
         ).unwrap();
 
@@ -243,6 +259,7 @@ mod tests {
             "".to_string(),
             dec!(1.0),
             Cadence::Daily,
+            test_account_id(),
             "test-owner".to_string(),
         ).unwrap();
 

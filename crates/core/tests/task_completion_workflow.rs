@@ -3,6 +3,12 @@ use loaa_core::models::{Task, Kid, Cadence};
 use loaa_core::workflows::TaskCompletionWorkflow;
 use rust_decimal_macros::dec;
 use tempfile::TempDir;
+use uuid::Uuid;
+
+fn test_account_id() -> Uuid {
+    // Use a fixed UUID for test account to keep tests deterministic
+    Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+}
 
 // NOTE: Tests require a running SurrealDB server on 127.0.0.1:8000
 // Run `just db` before running tests
@@ -32,7 +38,7 @@ async fn test_complete_one_time_task() {
     let (_temp_dir, workflow, task_repo, kid_repo, ledger_repo) = setup_test().await;
 
     // Create a kid
-    let kid = Kid::new("Alice".to_string(), "test-owner".to_string()).unwrap();
+    let kid = Kid::new("Alice".to_string(), test_account_id(), "test-owner".to_string()).unwrap();
     let kid_id = kid.id;
     kid_repo.create(kid).await.unwrap();
 
@@ -42,6 +48,7 @@ async fn test_complete_one_time_task() {
         "Organize and clean the garage".to_string(),
         dec!(10.00),
         Cadence::OneTime,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -70,7 +77,7 @@ async fn test_complete_daily_task() {
     let (_temp_dir, workflow, task_repo, kid_repo, _ledger_repo) = setup_test().await;
 
     // Create a kid
-    let kid = Kid::new("Bob".to_string(), "test-owner".to_string()).unwrap();
+    let kid = Kid::new("Bob".to_string(), test_account_id(), "test-owner".to_string()).unwrap();
     let kid_id = kid.id;
     kid_repo.create(kid).await.unwrap();
 
@@ -80,6 +87,7 @@ async fn test_complete_daily_task() {
         "Empty all trash bins".to_string(),
         dec!(1.50),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -111,7 +119,7 @@ async fn test_complete_task_multiple_times() {
     let (_temp_dir, workflow, task_repo, kid_repo, ledger_repo) = setup_test().await;
 
     // Create a kid
-    let kid = Kid::new("Charlie".to_string(), "test-owner".to_string()).unwrap();
+    let kid = Kid::new("Charlie".to_string(), test_account_id(), "test-owner".to_string()).unwrap();
     let kid_id = kid.id;
     kid_repo.create(kid).await.unwrap();
 
@@ -121,6 +129,7 @@ async fn test_complete_task_multiple_times() {
         "Wash and dry all dishes".to_string(),
         dec!(2.00),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -143,11 +152,11 @@ async fn test_complete_task_for_different_kids() {
     let (_temp_dir, workflow, task_repo, kid_repo, ledger_repo) = setup_test().await;
 
     // Create two kids
-    let kid1 = Kid::new("Alice".to_string(), "test-owner".to_string()).unwrap();
+    let kid1 = Kid::new("Alice".to_string(), test_account_id(), "test-owner".to_string()).unwrap();
     let kid1_id = kid1.id;
     kid_repo.create(kid1).await.unwrap();
 
-    let kid2 = Kid::new("Bob".to_string(), "test-owner".to_string()).unwrap();
+    let kid2 = Kid::new("Bob".to_string(), test_account_id(), "test-owner".to_string()).unwrap();
     let kid2_id = kid2.id;
     kid_repo.create(kid2).await.unwrap();
 
@@ -157,6 +166,7 @@ async fn test_complete_task_for_different_kids() {
         "Vacuum the entire living room".to_string(),
         dec!(3.00),
         Cadence::Weekly,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -187,6 +197,7 @@ async fn test_complete_task_with_nonexistent_kid() {
         "Test".to_string(),
         dec!(1.00),
         Cadence::OneTime,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -205,7 +216,7 @@ async fn test_complete_nonexistent_task() {
     let (_temp_dir, workflow, _task_repo, kid_repo, _ledger_repo) = setup_test().await;
 
     // Create a kid
-    let kid = Kid::new("Alice".to_string(), "test-owner".to_string()).unwrap();
+    let kid = Kid::new("Alice".to_string(), test_account_id(), "test-owner".to_string()).unwrap();
     let kid_id = kid.id;
     kid_repo.create(kid).await.unwrap();
 

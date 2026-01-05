@@ -181,6 +181,15 @@ impl LoaaServer {
         self.owner_id.clone()
     }
 
+    /// Get the account_id for the current user.
+    /// TODO: In the future, this should look up the user's account_id from the database.
+    /// For now, we generate a deterministic UUID from the owner_id.
+    fn get_account_id(&self, extensions: &Extensions) -> Uuid {
+        let owner_id = self.get_owner_id(extensions);
+        // Generate deterministic UUID from owner_id using UUID v5 with DNS namespace
+        Uuid::new_v5(&Uuid::NAMESPACE_DNS, owner_id.as_bytes())
+    }
+
     #[tool(description = "Create a new kid in the system. Returns the created kid with their ID.")]
     async fn create_kid(
         &self,
@@ -188,7 +197,8 @@ impl LoaaServer {
         Parameters(params): Parameters<CreateKidParams>,
     ) -> Result<CallToolResult, McpError> {
         let owner_id = self.get_owner_id(&extensions);
-        let kid = Kid::new(params.name, owner_id).map_err(|e| {
+        let account_id = self.get_account_id(&extensions);
+        let kid = Kid::new(params.name, account_id, owner_id).map_err(|e| {
             McpError::invalid_request(e.to_string(), None)
         })?;
 
@@ -288,7 +298,8 @@ impl LoaaServer {
             }
         };
 
-        let mut task = Task::new(params.name, params.description, value_dec, cadence_enum, owner_id)
+        let account_id = self.get_account_id(&extensions);
+        let mut task = Task::new(params.name, params.description, value_dec, cadence_enum, account_id, owner_id)
             .map_err(|e| {
                 McpError::invalid_request(e.to_string(), None)
             })?;

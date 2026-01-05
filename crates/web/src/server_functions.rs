@@ -74,7 +74,8 @@ pub async fn get_kids() -> Result<Vec<KidDto>, ServerFnError> {
 #[server]
 pub async fn create_kid(name: String) -> Result<KidDto, ServerFnError> {
     let owner_id = get_owner_id().await?;
-    let kid = Kid::new(name, owner_id)
+    let account_id = get_account_id().await?;
+    let kid = Kid::new(name, account_id, owner_id)
         .map_err(|e| ServerFnError::new(format!("Validation error: {}", e)))?;
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
@@ -101,7 +102,8 @@ pub async fn create_task(
     cadence: CadenceDto,
 ) -> Result<TaskDto, ServerFnError> {
     let owner_id = get_owner_id().await?;
-    let task = Task::new(name, description, value, cadence.into(), owner_id)
+    let account_id = get_account_id().await?;
+    let task = Task::new(name, description, value, cadence.into(), account_id, owner_id)
         .map_err(|e| ServerFnError::new(format!("Validation error: {}", e)))?;
     let db = get_db().await?;
     let task_repo = TaskRepository::new(db.client.clone());
@@ -386,6 +388,17 @@ async fn get_owner_id() -> Result<String, ServerFnError> {
         .map_err(|e| ServerFnError::new(format!("Failed to get session: {}", e)))?;
 
     user_id.ok_or_else(|| ServerFnError::new("Not authenticated".to_string()))
+}
+
+// Helper to get the current account_id from session
+// TODO: In the future, this should look up the user's account_id from the database
+// For now, we generate a deterministic UUID from the owner_id
+#[cfg(feature = "ssr")]
+async fn get_account_id() -> Result<Uuid, ServerFnError> {
+    let owner_id = get_owner_id().await?;
+    // Generate deterministic UUID from owner_id using UUID v5 with DNS namespace
+    // This ensures the same owner always gets the same account_id
+    Ok(Uuid::new_v5(&Uuid::NAMESPACE_DNS, owner_id.as_bytes()))
 }
 
 #[server]

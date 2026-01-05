@@ -5,6 +5,11 @@ use rust_decimal_macros::dec;
 use tempfile::TempDir;
 use uuid::Uuid;
 
+fn test_account_id() -> Uuid {
+    // Use a fixed UUID for test account to keep tests deterministic
+    Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+}
+
 async fn setup_test_db() -> (TempDir, TaskRepository) {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
@@ -34,6 +39,7 @@ async fn test_create_task() {
         "Empty all trash bins".to_string(),
         dec!(1.50),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -53,6 +59,7 @@ async fn test_get_task() {
         "Wash and dry all dishes".to_string(),
         dec!(2.00),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -84,6 +91,7 @@ async fn test_list_tasks() {
         "Description 1".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -93,6 +101,7 @@ async fn test_list_tasks() {
         "Description 2".to_string(),
         dec!(2.00),
         Cadence::Weekly,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -102,6 +111,7 @@ async fn test_list_tasks() {
         "Description 3".to_string(),
         dec!(3.00),
         Cadence::OneTime,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -123,6 +133,7 @@ async fn test_update_task() {
         "Original description".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -158,6 +169,7 @@ async fn test_update_nonexistent_task() {
         "Test".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();
@@ -175,6 +187,7 @@ async fn test_delete_task() {
         "This will be deleted".to_string(),
         dec!(1.00),
         Cadence::Daily,
+        test_account_id(),
         "test-owner".to_string(),
     )
     .unwrap();

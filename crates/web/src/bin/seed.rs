@@ -1,6 +1,6 @@
 use loaa_core::{
     init_database_with_config, Config, Kid, KidRepository, Task, TaskRepository,
-    Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password,
+    Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password, Uuid,
 };
 use rust_decimal_macros::dec;
 use chrono::{Duration, Utc};
@@ -27,13 +27,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     test_user.password_hash = hash_password("testuser")?;
     let created_user = user_repo.create(test_user).await?;
     let owner_id = created_user.id.to_string();
+    // Generate deterministic account_id from owner_id (same as server_functions.rs)
+    let account_id = Uuid::new_v5(&Uuid::NAMESPACE_DNS, owner_id.as_bytes());
     println!("  ✓ Created: testuser (password: testuser)\n");
 
     // Create kids (owned by testuser)
     println!("👦 Creating kids...");
     let kids = vec![
-        Kid::new("Jack".to_string(), owner_id.clone())?,
-        Kid::new("Emma".to_string(), owner_id.clone())?,
+        Kid::new("Jack".to_string(), account_id, owner_id.clone())?,
+        Kid::new("Emma".to_string(), account_id, owner_id.clone())?,
     ];
 
     for kid in kids {
@@ -51,6 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Clean the litter box".to_string(),
             dec!(0.50),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new(
@@ -58,6 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Take out the trash".to_string(),
             dec!(0.50),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new(
@@ -65,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Wipe down surfaces".to_string(),
             dec!(0.50),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new(
@@ -72,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Sweep the floor".to_string(),
             dec!(0.50),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new(
@@ -79,6 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Clean the bathroom sink".to_string(),
             dec!(0.50),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         // Daily tasks - $1.00
@@ -87,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Wash a full load of dishes".to_string(),
             dec!(1.00),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new(
@@ -94,6 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Vacuum the carpets".to_string(),
             dec!(1.00),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new(
@@ -101,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Mop the floor".to_string(),
             dec!(1.00),
             Cadence::Daily,
+            account_id,
             owner_id.clone(),
         )?,
         // Weekly tasks
@@ -109,6 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Clean the bathroom mirror".to_string(),
             dec!(0.50),
             Cadence::Weekly,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new(
@@ -116,6 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Clean the toilet".to_string(),
             dec!(1.00),
             Cadence::Weekly,
+            account_id,
             owner_id.clone(),
         )?,
     ];
@@ -127,6 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Help with yard work - all helpers get credit".to_string(),
             dec!(2.00),
             Cadence::Weekly,
+            account_id,
             owner_id.clone(),
         )?,
         Task::new_collaborative(
@@ -134,6 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Clean the car together - all helpers get credit".to_string(),
             dec!(1.50),
             Cadence::Weekly,
+            account_id,
             owner_id.clone(),
         )?,
     ];

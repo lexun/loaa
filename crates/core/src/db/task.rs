@@ -77,6 +77,16 @@ impl TaskRepository {
         Ok(records.into_iter().map(|rec| rec.into_task()).collect())
     }
 
+    pub async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Task>> {
+        let records: Vec<TaskRecord> = self.db
+            .query("SELECT * FROM task WHERE account_id = $account_id")
+            .bind(("account_id", account_id.to_string()))
+            .await?
+            .take(0)?;
+
+        Ok(records.into_iter().map(|rec| rec.into_task()).collect())
+    }
+
     pub async fn update(&self, task: Task) -> Result<Task> {
         let task_id = task.id;
 
