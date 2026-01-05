@@ -6,7 +6,7 @@
 pub mod auth;
 
 use anyhow::Result;
-use loaa_core::db::{init_database_with_config, Database, KidRepository, LedgerRepository, TaskRepository};
+use loaa_core::db::{init_database_with_config, Database, KidRepository, LedgerRepository, TaskRepository, UserRepository};
 use loaa_core::config::DatabaseConfig;
 use loaa_core::events::{DataEvent, EventSender, broadcast_event};
 use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Task};
@@ -33,6 +33,7 @@ pub struct LoaaServer {
     task_repo: Arc<RwLock<TaskRepository>>,
     kid_repo: Arc<RwLock<KidRepository>>,
     ledger_repo: Arc<RwLock<LedgerRepository>>,
+    user_repo: Arc<RwLock<UserRepository>>,
     workflow: Arc<RwLock<TaskCompletionWorkflow>>,
     event_sender: Option<EventSender>,
     /// The owner ID for this session (user_id from OAuth token)
@@ -141,6 +142,7 @@ impl LoaaServer {
         let task_repo = TaskRepository::new(database.client.clone());
         let kid_repo = KidRepository::new(database.client.clone());
         let ledger_repo = LedgerRepository::new(database.client.clone());
+        let user_repo = UserRepository::new(database.client.clone());
 
         let workflow = TaskCompletionWorkflow::new(
             TaskRepository::new(database.client.clone()),
@@ -152,6 +154,7 @@ impl LoaaServer {
             task_repo: Arc::new(RwLock::new(task_repo)),
             kid_repo: Arc::new(RwLock::new(kid_repo)),
             ledger_repo: Arc::new(RwLock::new(ledger_repo)),
+            user_repo: Arc::new(RwLock::new(user_repo)),
             workflow: Arc::new(RwLock::new(workflow)),
             event_sender,
             owner_id,
@@ -181,13 +184,19 @@ impl LoaaServer {
         self.owner_id.clone()
     }
 
-    /// Get the account_id for the current user.
-    /// TODO: In the future, this should look up the user's account_id from the database.
-    /// For now, we generate a deterministic UUID from the owner_id.
-    fn get_account_id(&self, extensions: &Extensions) -> Uuid {
+    /// Get the account_id for the current user by looking up the user in the database.
+    async fn get_account_id(&self, extensions: &Extensions) -> Result<Uuid, McpError> {
         let owner_id = self.get_owner_id(extensions);
-        // Generate deterministic UUID from owner_id using UUID v5 with DNS namespace
-        Uuid::new_v5(&Uuid::NAMESPACE_DNS, owner_id.as_bytes())
+        let user_id = Uuid::parse_str(&owner_id).map_err(|e| {
+            McpError::invalid_request(format!("Invalid user ID: {}", e), None)
+        })?;
+
+        let user_repo = self.user_repo.read().await;
+        let user = user_repo.get(user_id).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": format!("Failed to get user: {}", e)})))
+        })?;
+
+        Ok(user.account_id)
     }
 
     #[tool(description = "Create a new kid in the system. Returns the created kid with their ID.")]
@@ -197,7 +206,7 @@ impl LoaaServer {
         Parameters(params): Parameters<CreateKidParams>,
     ) -> Result<CallToolResult, McpError> {
         let owner_id = self.get_owner_id(&extensions);
-        let account_id = self.get_account_id(&extensions);
+        let account_id = self.get_account_id(&extensions).await?;
         let kid = Kid::new(params.name, account_id, owner_id).map_err(|e| {
             McpError::invalid_request(e.to_string(), None)
         })?;
@@ -298,7 +307,7 @@ impl LoaaServer {
             }
         };
 
-        let account_id = self.get_account_id(&extensions);
+        let account_id = self.get_account_id(&extensions).await?;
         let mut task = Task::new(params.name, params.description, value_dec, cadence_enum, account_id, owner_id)
             .map_err(|e| {
                 McpError::invalid_request(e.to_string(), None)

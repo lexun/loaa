@@ -1,6 +1,7 @@
 use loaa_core::{
     init_database_with_config, Config, Kid, KidRepository, Task, TaskRepository,
-    Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password, Uuid,
+    Cadence, LedgerRepository, LedgerEntry, User, UserRepository, hash_password,
+    Account, AccountRepository,
 };
 use rust_decimal_macros::dec;
 use chrono::{Duration, Utc};
@@ -18,17 +19,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = init_database_with_config(&config.database).await?;
 
     let user_repo = UserRepository::new(db.client.clone());
+    let account_repo = AccountRepository::new(db.client.clone());
     let kid_repo = KidRepository::new(db.client.clone());
     let task_repo = TaskRepository::new(db.client.clone());
 
+    // Create a test account (household) first
+    println!("🏠 Creating test account...");
+    let account = Account::new("Test Household".to_string())?;
+    let created_account = account_repo.create(account).await?;
+    let account_id = created_account.id;
+    println!("  ✓ Created: Test Household (ID: {})\n", account_id);
+
     // Create a test user account that owns the test data
-    println!("👤 Creating test user account...");
-    let mut test_user = User::new("testuser".to_string())?;
+    println!("👤 Creating test user...");
+    let mut test_user = User::new("testuser".to_string(), account_id)?;
     test_user.password_hash = hash_password("testuser")?;
     let created_user = user_repo.create(test_user).await?;
     let owner_id = created_user.id.to_string();
-    // Generate deterministic account_id from owner_id (same as server_functions.rs)
-    let account_id = Uuid::new_v5(&Uuid::NAMESPACE_DNS, owner_id.as_bytes());
     println!("  ✓ Created: testuser (password: testuser)\n");
 
     // Create kids (owned by testuser)

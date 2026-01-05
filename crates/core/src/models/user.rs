@@ -20,23 +20,26 @@ pub struct User {
     pub password_hash: String,
     #[serde(default)]
     pub account_type: AccountType,
+    /// The account this user belongs to (for data isolation)
+    pub account_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl User {
     /// Create a new regular user (without password hash - that must be set separately)
-    pub fn new(username: String) -> Result<Self> {
-        Self::new_with_type(username, AccountType::User)
+    pub fn new(username: String, account_id: Uuid) -> Result<Self> {
+        Self::new_with_type(username, AccountType::User, account_id)
     }
 
     /// Create a new user with a specific account type
-    pub fn new_with_type(username: String, account_type: AccountType) -> Result<Self> {
+    pub fn new_with_type(username: String, account_type: AccountType, account_id: Uuid) -> Result<Self> {
         let user = Self {
             id: Uuid::new_v4(),
             username,
             password_hash: String::new(),  // Must be set before saving
             account_type,
+            account_id,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         };
@@ -84,35 +87,41 @@ impl User {
 mod tests {
     use super::*;
 
+    fn test_account_id() -> Uuid {
+        Uuid::new_v4()
+    }
+
     #[test]
     fn test_valid_user() {
-        let user = User::new("testuser".to_string()).unwrap();
+        let account_id = test_account_id();
+        let user = User::new("testuser".to_string(), account_id).unwrap();
         assert_eq!(user.username, "testuser");
+        assert_eq!(user.account_id, account_id);
         assert!(user.password_hash.is_empty());
     }
 
     #[test]
     fn test_username_too_short() {
-        let result = User::new("ab".to_string());
+        let result = User::new("ab".to_string(), test_account_id());
         assert!(result.is_err());
     }
 
     #[test]
     fn test_username_too_long() {
         let long_name = "a".repeat(51);
-        let result = User::new(long_name);
+        let result = User::new(long_name, test_account_id());
         assert!(result.is_err());
     }
 
     #[test]
     fn test_username_invalid_chars() {
-        let result = User::new("test@user".to_string());
+        let result = User::new("test@user".to_string(), test_account_id());
         assert!(result.is_err());
     }
 
     #[test]
     fn test_username_with_underscore_and_hyphen() {
-        let user = User::new("test_user-123".to_string()).unwrap();
+        let user = User::new("test_user-123".to_string(), test_account_id()).unwrap();
         assert_eq!(user.username, "test_user-123");
     }
 }

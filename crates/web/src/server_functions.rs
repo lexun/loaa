@@ -4,7 +4,7 @@ use crate::dto::*;
 
 #[cfg(feature = "ssr")]
 use loaa_core::{
-    Database, KidRepository, TaskRepository, LedgerRepository, UserRepository,
+    Database, KidRepository, TaskRepository, LedgerRepository, UserRepository, AccountRepository,
     init_database_with_config, Config, Uuid, verify_password, hash_password,
     EventSender,
 };
@@ -390,15 +390,20 @@ async fn get_owner_id() -> Result<String, ServerFnError> {
     user_id.ok_or_else(|| ServerFnError::new("Not authenticated".to_string()))
 }
 
-// Helper to get the current account_id from session
-// TODO: In the future, this should look up the user's account_id from the database
-// For now, we generate a deterministic UUID from the owner_id
+// Helper to get the current account_id by looking up the user
 #[cfg(feature = "ssr")]
 async fn get_account_id() -> Result<Uuid, ServerFnError> {
     let owner_id = get_owner_id().await?;
-    // Generate deterministic UUID from owner_id using UUID v5 with DNS namespace
-    // This ensures the same owner always gets the same account_id
-    Ok(Uuid::new_v5(&Uuid::NAMESPACE_DNS, owner_id.as_bytes()))
+    let user_id = Uuid::parse_str(&owner_id)
+        .map_err(|e| ServerFnError::new(format!("Invalid user ID: {}", e)))?;
+
+    let db = get_db().await?;
+    let user_repo = UserRepository::new(db.client.clone());
+
+    let user = user_repo.get(user_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to get user: {}", e)))?;
+
+    Ok(user.account_id)
 }
 
 #[server]
@@ -420,14 +425,21 @@ pub async fn create_account(username: String, password: String) -> Result<Accoun
 
     let db = get_db().await?;
     let user_repo = UserRepository::new(db.client.clone());
+    let account_repo = AccountRepository::new(db.client.clone());
 
     // Check if username already exists
     if user_repo.get_by_username(&username).await.is_ok() {
         return Err(ServerFnError::new(format!("Username '{}' already exists", username)));
     }
 
-    // Create new user
-    let mut user = loaa_core::models::User::new(username)
+    // Create a new account for this user (their household)
+    let account = loaa_core::models::Account::new(format!("{}'s Household", username))
+        .map_err(|e| ServerFnError::new(format!("Failed to create account: {}", e)))?;
+    let created_account = account_repo.create(account).await
+        .map_err(|e| ServerFnError::new(format!("Failed to save account: {}", e)))?;
+
+    // Create new user with the account_id
+    let mut user = loaa_core::models::User::new(username, created_account.id)
         .map_err(|e| ServerFnError::new(format!("Invalid user data: {}", e)))?;
 
     // Hash password
@@ -438,7 +450,7 @@ pub async fn create_account(username: String, password: String) -> Result<Accoun
     let created = user_repo.create(user).await
         .map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
 
-    eprintln!("✅ Created account: {}", created.username);
+    eprintln!("✅ Created account: {} (account: {})", created.username, created_account.id);
     Ok(created.into())
 }
 
