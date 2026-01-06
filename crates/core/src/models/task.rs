@@ -12,7 +12,8 @@ pub struct Task {
     pub description: String,
     pub value: Decimal,
     pub cadence: Cadence,
-    /// Account this task belongs to
+    /// Account this task belongs to (default for backward compatibility)
+    #[serde(default)]
     pub account_id: Uuid,
     /// Owner of this task (user_id as string, or "admin" for admin-created)
     #[serde(default)]

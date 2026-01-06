@@ -8,7 +8,8 @@ pub struct Kid {
     #[serde(skip)]
     pub id: Uuid,
     pub name: String,
-    /// Account this kid belongs to
+    /// Account this kid belongs to (default for backward compatibility)
+    #[serde(default)]
     pub account_id: Uuid,
     /// Owner of this kid record (user_id as string, or "admin" for admin-created)
     #[serde(default)]
