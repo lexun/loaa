@@ -21,6 +21,8 @@ pub struct User {
     #[serde(default)]
     pub account_type: AccountType,
     /// The account this user belongs to (for data isolation)
+    /// Default is nil UUID for backward compatibility with existing users
+    #[serde(default)]
     pub account_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
