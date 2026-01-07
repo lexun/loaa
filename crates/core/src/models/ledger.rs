@@ -3,6 +3,19 @@ use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
+/// Status of a ledger transaction (for kid approval workflow)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TransactionStatus {
+    Confirmed,  // Approved by parent or created by parent
+    Pending,    // Created by kid, awaiting approval
+}
+
+impl Default for TransactionStatus {
+    fn default() -> Self {
+        TransactionStatus::Confirmed
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LedgerEntry {
     #[serde(skip)]
@@ -12,6 +25,15 @@ pub struct LedgerEntry {
     pub amount: Decimal,
     pub entry_type: EntryType,
     pub description: String,
+    /// Transaction status (Confirmed or Pending)
+    #[serde(default)]
+    pub status: TransactionStatus,
+    /// Link to task (for rejection workflow - removing from completed_by)
+    #[serde(default)]
+    pub task_id: Option<Uuid>,
+    /// User who reported completion (user_id as string)
+    #[serde(default)]
+    pub reported_by: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -45,6 +67,31 @@ impl LedgerEntry {
             amount,
             entry_type,
             description: description.trim().to_string(),
+            status: TransactionStatus::Confirmed,
+            task_id: None,
+            reported_by: None,
+            created_at: Utc::now(),
+        }
+    }
+
+    /// Create an earned entry with additional metadata for approval workflow
+    pub fn earned_with_metadata(
+        kid_id: Uuid,
+        amount: Decimal,
+        description: String,
+        status: TransactionStatus,
+        task_id: Option<Uuid>,
+        reported_by: Option<String>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            kid_id,
+            amount,
+            entry_type: EntryType::Earned,
+            description: description.trim().to_string(),
+            status,
+            task_id,
+            reported_by,
             created_at: Utc::now(),
         }
     }
@@ -55,6 +102,11 @@ impl LedgerEntry {
 
     pub fn adjusted(kid_id: Uuid, amount: Decimal, description: String) -> Self {
         Self::new(kid_id, amount, EntryType::Adjusted, description)
+    }
+
+    /// Check if this entry is pending approval
+    pub fn is_pending(&self) -> bool {
+        self.status == TransactionStatus::Pending
     }
 }
 

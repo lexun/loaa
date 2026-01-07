@@ -5,6 +5,7 @@ use crate::dto::*;
 #[cfg(feature = "ssr")]
 use loaa_core::{
     Database, KidRepository, TaskRepository, LedgerRepository, UserRepository, AccountRepository,
+    AccountMembershipRepository,
     init_database_with_config, Config, Uuid, verify_password, hash_password,
     EventSender,
 };
@@ -121,6 +122,23 @@ pub async fn complete_task(kid_id: UuidDto, task_id: UuidDto) -> Result<(), Serv
     let task_uuid = Uuid::from_str(&task_id)
         .map_err(|e| ServerFnError::new(format!("Invalid task ID: {}", e)))?;
 
+    // Get session to check membership role
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    let user_id: Option<String> = session.get("user_id").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // Determine transaction status based on role
+    // Kid users create pending transactions, parents create confirmed
+    let status = match membership_role.as_deref() {
+        Some("kid") => TransactionStatus::Pending,
+        _ => TransactionStatus::Confirmed,
+    };
+
     // Use the TaskCompletionWorkflow to handle task completion
     // This ensures recurring tasks are properly reset
     let task_repo = TaskRepository::new(db.client.clone());
@@ -128,7 +146,7 @@ pub async fn complete_task(kid_id: UuidDto, task_id: UuidDto) -> Result<(), Serv
     let ledger_repo = LedgerRepository::new(db.client.clone());
 
     let workflow = TaskCompletionWorkflow::new(task_repo, kid_repo, ledger_repo);
-    workflow.complete_task(task_uuid, kid_uuid).await
+    workflow.complete_task_with_status(task_uuid, kid_uuid, status, user_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to complete task: {}", e)))?;
 
     Ok(())
@@ -265,6 +283,35 @@ pub async fn login(username: String, password: String) -> Result<bool, ServerFnE
         session.insert("account_type", account_type_str.to_string())
             .await
             .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
+
+        // Look up membership role (create Parent if missing for existing users)
+        let membership_repo = AccountMembershipRepository::new(db.client.clone());
+        let membership = match membership_repo.get_primary_for_user(user.id).await {
+            Ok(m) => m,
+            Err(_) => {
+                // No membership found - create one for existing user
+                // This handles backward compatibility for users created before memberships
+                let new_membership = AccountMembership::new_parent(user.account_id, user.id);
+                membership_repo.create(new_membership).await
+                    .map_err(|e| ServerFnError::new(format!("Failed to create membership: {}", e)))?
+            }
+        };
+
+        // Store membership role in session
+        let role_str = match membership.role {
+            MembershipRole::Parent => "parent",
+            MembershipRole::Kid => "kid",
+        };
+        session.insert("membership_role", role_str.to_string())
+            .await
+            .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
+
+        // Store linked kid_id if present (for kid users linked to a specific kid)
+        if let Some(kid_id) = membership.kid_id {
+            session.insert("linked_kid_id", kid_id.to_string())
+                .await
+                .map_err(|e| ServerFnError::new(format!("Failed to set session: {}", e)))?;
+        }
 
         Ok(true)
     } else {
@@ -524,4 +571,257 @@ pub async fn send_chat_message(
         .map_err(|e| ServerFnError::new(format!("Chat error: {}", e)))?;
 
     Ok(response)
+}
+
+// ============================================================================
+// Transaction Approval Functions (for kid login workflow)
+// ============================================================================
+
+/// List pending transactions for the current user's account
+/// Only parents can see pending transactions
+#[server]
+pub async fn list_pending_transactions() -> Result<Vec<LedgerEntryDto>, ServerFnError> {
+    let owner_id = get_owner_id().await?;
+    let db = get_db().await?;
+
+    // Get session to check membership role
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // Only parents can view pending transactions
+    if membership_role.as_deref() == Some("kid") {
+        return Ok(Vec::new());
+    }
+
+    // Get all kids for this owner
+    let kid_repo = KidRepository::new(db.client.clone());
+    let kids = kid_repo.list_by_owner(&owner_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
+
+    let kid_ids: Vec<Uuid> = kids.iter().map(|k| k.id).collect();
+
+    // Get pending transactions for all kids
+    let ledger_repo = LedgerRepository::new(db.client.clone());
+    let pending = ledger_repo.list_pending_for_kids(&kid_ids).await
+        .map_err(|e| ServerFnError::new(format!("Failed to list pending: {}", e)))?;
+
+    Ok(pending.into_iter().map(Into::into).collect())
+}
+
+/// Approve a pending transaction (parent only)
+#[server]
+pub async fn approve_transaction(entry_id: UuidDto) -> Result<(), ServerFnError> {
+    let db = get_db().await?;
+
+    // Get session to check membership role
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // Only parents can approve transactions
+    if membership_role.as_deref() == Some("kid") {
+        return Err(ServerFnError::new("Only parents can approve transactions".to_string()));
+    }
+
+    let entry_uuid = Uuid::from_str(&entry_id)
+        .map_err(|e| ServerFnError::new(format!("Invalid entry ID: {}", e)))?;
+
+    let ledger_repo = LedgerRepository::new(db.client.clone());
+
+    // Verify the entry exists and is pending
+    let entry = ledger_repo.get_entry(entry_uuid).await
+        .map_err(|e| ServerFnError::new(format!("Failed to get entry: {}", e)))?
+        .ok_or_else(|| ServerFnError::new("Transaction not found".to_string()))?;
+
+    if entry.status != TransactionStatus::Pending {
+        return Err(ServerFnError::new("Transaction is not pending".to_string()));
+    }
+
+    // Update status to Confirmed
+    ledger_repo.update_status(entry_uuid, TransactionStatus::Confirmed).await
+        .map_err(|e| ServerFnError::new(format!("Failed to approve: {}", e)))?;
+
+    Ok(())
+}
+
+/// Create a kid login for the current account (parent only)
+/// The kid login can optionally be linked to a specific kid record
+#[server]
+pub async fn create_kid_login(
+    username: String,
+    password: String,
+    linked_kid_id: Option<UuidDto>,
+) -> Result<(), ServerFnError> {
+    let db = get_db().await?;
+
+    // Get session to check membership role and get user info
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // Only parents can create kid logins
+    if membership_role.as_deref() == Some("kid") {
+        return Err(ServerFnError::new("Only parents can create kid logins".to_string()));
+    }
+
+    let user_id_str: Option<String> = session.get("user_id").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    let user_id_str = user_id_str.ok_or_else(|| ServerFnError::new("Not logged in".to_string()))?;
+
+    // Get the parent user to get account_id
+    let user_repo = UserRepository::new(db.client.clone());
+    let parent_user = if user_id_str == "admin" {
+        return Err(ServerFnError::new("Admin cannot create kid logins".to_string()));
+    } else {
+        let user_id = Uuid::from_str(&user_id_str)
+            .map_err(|e| ServerFnError::new(format!("Invalid user ID: {}", e)))?;
+        user_repo.get(user_id).await
+            .map_err(|e| ServerFnError::new(format!("Failed to get user: {}", e)))?
+    };
+
+    // Check if username already exists
+    if user_repo.get_by_username(&username).await.is_ok() {
+        return Err(ServerFnError::new("Username already exists".to_string()));
+    }
+
+    // Hash password
+    let password_hash = hash_password(&password)
+        .map_err(|e| ServerFnError::new(format!("Failed to hash password: {}", e)))?;
+
+    // Create the kid user
+    let mut kid_user = User::new(username.clone(), parent_user.account_id)
+        .map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
+    kid_user.password_hash = password_hash;
+
+    let created_user = user_repo.create(kid_user).await
+        .map_err(|e| ServerFnError::new(format!("Failed to save user: {}", e)))?;
+
+    // Create AccountMembership with Kid role
+    let membership_repo = AccountMembershipRepository::new(db.client.clone());
+    let membership = if let Some(kid_id_str) = linked_kid_id {
+        let kid_id = Uuid::from_str(&kid_id_str)
+            .map_err(|e| ServerFnError::new(format!("Invalid kid ID: {}", e)))?;
+        AccountMembership::new_kid(parent_user.account_id, created_user.id, kid_id)
+    } else {
+        AccountMembership::new_kid_shared(parent_user.account_id, created_user.id)
+    };
+
+    membership_repo.create(membership).await
+        .map_err(|e| ServerFnError::new(format!("Failed to create membership: {}", e)))?;
+
+    eprintln!("✅ Created kid login: {}", username);
+    Ok(())
+}
+
+/// List kid logins for the current account (parent only)
+#[server]
+pub async fn list_kid_logins() -> Result<Vec<KidLoginDto>, ServerFnError> {
+    let db = get_db().await?;
+
+    // Get session to check membership role and get user info
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // Only parents can list kid logins
+    if membership_role.as_deref() == Some("kid") {
+        return Ok(Vec::new());
+    }
+
+    let user_id_str: Option<String> = session.get("user_id").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    let user_id_str = user_id_str.ok_or_else(|| ServerFnError::new("Not logged in".to_string()))?;
+
+    if user_id_str == "admin" {
+        return Ok(Vec::new());
+    }
+
+    let user_id = Uuid::from_str(&user_id_str)
+        .map_err(|e| ServerFnError::new(format!("Invalid user ID: {}", e)))?;
+
+    // Get the parent user to get account_id
+    let user_repo = UserRepository::new(db.client.clone());
+    let parent_user = user_repo.get(user_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to get user: {}", e)))?;
+
+    // Get all memberships for this account
+    let membership_repo = AccountMembershipRepository::new(db.client.clone());
+    let memberships = membership_repo.list_by_account(parent_user.account_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to list memberships: {}", e)))?;
+
+    // Filter for kid memberships and get user info
+    let mut kid_logins = Vec::new();
+    for membership in memberships {
+        if membership.is_kid() {
+            if let Ok(user) = user_repo.get(membership.user_id).await {
+                kid_logins.push(KidLoginDto {
+                    user_id: user.id.to_string(),
+                    username: user.username,
+                    linked_kid_id: membership.kid_id.map(|id| id.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(kid_logins)
+}
+
+/// Reject a pending transaction (parent only)
+/// This deletes the ledger entry and removes the kid from the task's completed_by list
+#[server]
+pub async fn reject_transaction(entry_id: UuidDto) -> Result<(), ServerFnError> {
+    let db = get_db().await?;
+
+    // Get session to check membership role
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // Only parents can reject transactions
+    if membership_role.as_deref() == Some("kid") {
+        return Err(ServerFnError::new("Only parents can reject transactions".to_string()));
+    }
+
+    let entry_uuid = Uuid::from_str(&entry_id)
+        .map_err(|e| ServerFnError::new(format!("Invalid entry ID: {}", e)))?;
+
+    let ledger_repo = LedgerRepository::new(db.client.clone());
+
+    // Get the entry to find task_id and kid_id
+    let entry = ledger_repo.get_entry(entry_uuid).await
+        .map_err(|e| ServerFnError::new(format!("Failed to get entry: {}", e)))?
+        .ok_or_else(|| ServerFnError::new("Transaction not found".to_string()))?;
+
+    if entry.status != TransactionStatus::Pending {
+        return Err(ServerFnError::new("Transaction is not pending".to_string()));
+    }
+
+    // Remove kid from task's completed_by list (if task_id is present)
+    if let Some(task_id) = entry.task_id {
+        let task_repo = TaskRepository::new(db.client.clone());
+        if let Ok(mut task) = task_repo.get(task_id).await {
+            task.completed_by.retain(|&id| id != entry.kid_id);
+            task_repo.update(task).await
+                .map_err(|e| ServerFnError::new(format!("Failed to update task: {}", e)))?;
+        }
+    }
+
+    // Delete the ledger entry
+    ledger_repo.delete(entry_uuid).await
+        .map_err(|e| ServerFnError::new(format!("Failed to delete entry: {}", e)))?;
+
+    Ok(())
 }

@@ -1,7 +1,7 @@
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use surrealdb::sql::Thing;
-use crate::models::{LedgerEntry, Ledger};
+use crate::models::{LedgerEntry, Ledger, TransactionStatus};
 use crate::error::{Error, Result};
 use uuid::Uuid;
 use std::sync::Arc;
@@ -68,5 +68,56 @@ impl LedgerRepository {
 
         let records: Vec<LedgerEntryRecord> = response.take(0)?;
         Ok(records.into_iter().map(|rec| rec.into_entry()).collect())
+    }
+
+    /// Get a single ledger entry by ID
+    pub async fn get_entry(&self, entry_id: Uuid) -> Result<Option<LedgerEntry>> {
+        let record: Option<LedgerEntryRecord> = self.db
+            .select(("ledger_entry", entry_id.to_string()))
+            .await?;
+
+        Ok(record.map(|rec| rec.into_entry()))
+    }
+
+    /// List pending transactions for all kids in an account
+    pub async fn list_pending_for_kids(&self, kid_ids: &[Uuid]) -> Result<Vec<LedgerEntry>> {
+        if kid_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Convert UUIDs to lowercase strings for query
+        let kid_id_strs: Vec<String> = kid_ids.iter().map(|id| id.to_string().to_lowercase()).collect();
+
+        let mut response = self.db
+            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) IN $kid_ids AND status = 'Pending' ORDER BY created_at DESC")
+            .bind(("kid_ids", kid_id_strs))
+            .await?;
+
+        let records: Vec<LedgerEntryRecord> = response.take(0)?;
+        Ok(records.into_iter().map(|rec| rec.into_entry()).collect())
+    }
+
+    /// Update the status of a ledger entry (for approval workflow)
+    pub async fn update_status(&self, entry_id: Uuid, status: TransactionStatus) -> Result<LedgerEntry> {
+        let mut response = self.db
+            .query("UPDATE ledger_entry SET status = $status WHERE id = type::thing('ledger_entry', $id)")
+            .bind(("id", entry_id.to_string()))
+            .bind(("status", status))
+            .await?;
+
+        let records: Vec<LedgerEntryRecord> = response.take(0)?;
+        records
+            .into_iter()
+            .next()
+            .map(|rec| rec.into_entry())
+            .ok_or_else(|| Error::NotFound(format!("Ledger entry {} not found", entry_id)))
+    }
+
+    /// Delete a ledger entry (for rejection workflow)
+    pub async fn delete(&self, entry_id: Uuid) -> Result<()> {
+        let _: Option<LedgerEntryRecord> = self.db
+            .delete(("ledger_entry", entry_id.to_string()))
+            .await?;
+        Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use crate::db::{TaskRepository, KidRepository, LedgerRepository};
-use crate::models::LedgerEntry;
+use crate::models::{LedgerEntry, TransactionStatus};
 use crate::error::Result;
 use uuid::Uuid;
 
@@ -34,6 +34,20 @@ impl TaskCompletionWorkflow {
     ///
     /// Returns the created ledger entry
     pub async fn complete_task(&self, task_id: Uuid, kid_id: Uuid) -> Result<LedgerEntry> {
+        self.complete_task_with_status(task_id, kid_id, TransactionStatus::Confirmed, None).await
+    }
+
+    /// Complete a task for a kid with specified status and reporter
+    ///
+    /// - status: Confirmed for parent completions, Pending for kid completions
+    /// - reported_by: user_id of who reported the completion (for audit trail)
+    pub async fn complete_task_with_status(
+        &self,
+        task_id: Uuid,
+        kid_id: Uuid,
+        status: TransactionStatus,
+        reported_by: Option<String>,
+    ) -> Result<LedgerEntry> {
         // 1. Verify the kid exists
         let _kid = self.kid_repo.get(kid_id).await?;
 
@@ -50,9 +64,16 @@ impl TaskCompletionWorkflow {
             return Err(crate::error::Error::TaskNotAvailable(reason.to_string()));
         }
 
-        // 5. Create ledger entry for the earnings
+        // 5. Create ledger entry for the earnings with metadata
         let description = format!("Completed: {}", task.name);
-        let entry = LedgerEntry::earned(kid_id, task.value, description);
+        let entry = LedgerEntry::earned_with_metadata(
+            kid_id,
+            task.value,
+            description,
+            status,
+            Some(task_id),
+            reported_by,
+        );
         let created_entry = self.ledger_repo.create_entry(entry).await?;
 
         // 6. Mark this kid as having completed the task

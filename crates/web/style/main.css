@@ -267,6 +267,95 @@ li {
     font-weight: bold;
 }
 
+/* Pending activity items */
+.activity-item.pending {
+    background: #fff8e1;
+    border-left: 3px solid #f39c12;
+}
+
+.activity-item.pending .activity-amount {
+    color: #f39c12;
+}
+
+/* Pending Approvals Section */
+.pending-section {
+    background: #fff8e1;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #f39c12;
+}
+
+.pending-section h2 {
+    color: #d35400;
+}
+
+.pending-list {
+    list-style: none;
+    padding: 0;
+}
+
+.pending-item {
+    display: grid;
+    grid-template-columns: 80px 1fr auto auto;
+    gap: 15px;
+    padding: 12px;
+    margin: 5px 0;
+    background: white;
+    border-radius: 4px;
+    align-items: center;
+    border: 1px solid #ffe0b2;
+}
+
+.pending-time {
+    color: #7f8c8d;
+    font-size: 0.9em;
+}
+
+.pending-description {
+    color: #2c3e50;
+}
+
+.pending-amount {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.pending-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.approve-btn {
+    padding: 6px 12px;
+    background: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.2s;
+}
+
+.approve-btn:hover {
+    background: #219a52;
+}
+
+.reject-btn {
+    padding: 6px 12px;
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.2s;
+}
+
+.reject-btn:hover {
+    background: #c0392b;
+}
+
 /* Ledger View */
 .ledger-view {
     width: 100%;

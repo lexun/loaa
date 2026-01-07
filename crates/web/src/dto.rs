@@ -38,6 +38,13 @@ pub enum CadenceDto {
     OneTime,
 }
 
+// TransactionStatus DTO (for approval workflow)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TransactionStatusDto {
+    Confirmed,
+    Pending,
+}
+
 // LedgerEntry DTO
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LedgerEntryDto {
@@ -46,6 +53,8 @@ pub struct LedgerEntryDto {
     pub amount: Decimal,
     pub description: String,
     pub entry_type: EntryTypeDto,
+    pub status: TransactionStatusDto,
+    pub task_id: Option<UuidDto>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -101,6 +110,14 @@ pub struct AccountDto {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
+// Kid Login DTO (for listing kid logins)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KidLoginDto {
+    pub user_id: UuidDto,
+    pub username: String,
+    pub linked_kid_id: Option<UuidDto>,
+}
+
 // Conversion functions (only available on server side)
 #[cfg(feature = "ssr")]
 pub mod convert {
@@ -152,6 +169,15 @@ pub mod convert {
         }
     }
 
+    impl From<TransactionStatus> for TransactionStatusDto {
+        fn from(status: TransactionStatus) -> Self {
+            match status {
+                TransactionStatus::Confirmed => TransactionStatusDto::Confirmed,
+                TransactionStatus::Pending => TransactionStatusDto::Pending,
+            }
+        }
+    }
+
     impl From<LedgerEntry> for LedgerEntryDto {
         fn from(entry: LedgerEntry) -> Self {
             LedgerEntryDto {
@@ -160,6 +186,8 @@ pub mod convert {
                 amount: entry.amount,
                 description: entry.description,
                 entry_type: entry.entry_type.into(),
+                status: entry.status.into(),
+                task_id: entry.task_id.map(|id| id.to_string()),
                 created_at: entry.created_at,
             }
         }

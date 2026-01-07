@@ -340,19 +340,23 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
     let (tasks, set_tasks) = create_signal(Vec::<TaskDto>::new());
     let (is_loaded, set_is_loaded) = create_signal(false);
     let (recent_activity, set_recent_activity) = create_signal(Vec::<LedgerEntryDto>::new());
+    let (pending_transactions, set_pending_transactions) = create_signal(Vec::<LedgerEntryDto>::new());
 
     // Update signals when resource loads
     create_effect(move |_| {
         if let Some(Ok(data)) = dashboard_data.get() {
             set_kid_summaries.set(data.kid_summaries);
             set_is_loaded.set(true);
-            // Also fetch tasks and recent activity
+            // Also fetch tasks, recent activity, and pending transactions
             spawn_local(async move {
                 if let Ok(task_list) = get_tasks().await {
                     set_tasks.set(task_list);
                 }
                 if let Ok(entries) = get_recent_activity(10).await {
                     set_recent_activity.set(entries);
+                }
+                if let Ok(pending) = list_pending_transactions().await {
+                    set_pending_transactions.set(pending);
                 }
             });
         }
@@ -386,6 +390,9 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                         }
                         if let Ok(entries) = get_recent_activity(10).await {
                             set_recent_activity.set(entries);
+                        }
+                        if let Ok(pending) = list_pending_transactions().await {
+                            set_pending_transactions.set(pending);
                         }
                     });
                 });
@@ -450,6 +457,80 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                     }}
                 </section>
 
+                // Pending transactions section (only shown if there are pending transactions)
+                {move || {
+                    let pending = pending_transactions.get();
+                    if pending.is_empty() {
+                        view! { <div></div> }.into_view()
+                    } else {
+                        view! {
+                            <section class="pending-section">
+                                <h2>"Pending Approvals"</h2>
+                                <ul class="pending-list">
+                                    <For
+                                        each=move || pending_transactions.get()
+                                        key=|entry| entry.id.clone()
+                                        children=move |entry| {
+                                            let entry_id = entry.id.clone();
+                                            let entry_id_approve = entry_id.clone();
+                                            let entry_id_reject = entry_id.clone();
+                                            let time_ago = format_time_ago(entry.created_at);
+
+                                            let handle_approve = move |_| {
+                                                let id = entry_id_approve.clone();
+                                                spawn_local(async move {
+                                                    if approve_transaction(id).await.is_ok() {
+                                                        // Refresh pending list
+                                                        if let Ok(pending) = list_pending_transactions().await {
+                                                            set_pending_transactions.set(pending);
+                                                        }
+                                                        if let Ok(data) = get_dashboard_data().await {
+                                                            set_kid_summaries.set(data.kid_summaries);
+                                                        }
+                                                        if let Ok(entries) = get_recent_activity(10).await {
+                                                            set_recent_activity.set(entries);
+                                                        }
+                                                    }
+                                                });
+                                            };
+
+                                            let handle_reject = move |_| {
+                                                let id = entry_id_reject.clone();
+                                                spawn_local(async move {
+                                                    if reject_transaction(id).await.is_ok() {
+                                                        // Refresh pending list and tasks (task may now be available again)
+                                                        if let Ok(pending) = list_pending_transactions().await {
+                                                            set_pending_transactions.set(pending);
+                                                        }
+                                                        if let Ok(task_list) = get_tasks().await {
+                                                            set_tasks.set(task_list);
+                                                        }
+                                                        if let Ok(data) = get_dashboard_data().await {
+                                                            set_kid_summaries.set(data.kid_summaries);
+                                                        }
+                                                    }
+                                                });
+                                            };
+
+                                            view! {
+                                                <li class="pending-item">
+                                                    <span class="pending-time">{time_ago}</span>
+                                                    <span class="pending-description">{entry.description.clone()}</span>
+                                                    <span class="pending-amount">{"$"}{entry.amount.to_string()}</span>
+                                                    <div class="pending-actions">
+                                                        <button class="approve-btn" on:click=handle_approve>"Approve"</button>
+                                                        <button class="reject-btn" on:click=handle_reject>"Reject"</button>
+                                                    </div>
+                                                </li>
+                                            }
+                                        }
+                                    />
+                                </ul>
+                            </section>
+                        }.into_view()
+                    }
+                }}
+
                 <section class="recent-activity">
                     <h2>"Recent Activity"</h2>
                     {move || {
@@ -467,12 +548,15 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                                                 EntryTypeDto::Earned => "Earned",
                                                 EntryTypeDto::Adjusted => "Adjusted",
                                             };
+                                            let is_pending = entry.status == TransactionStatusDto::Pending;
+                                            let status_label = if is_pending { " (pending)" } else { "" };
                                             let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                                             let time_ago = format_time_ago(entry.created_at);
+                                            let pending_class = if is_pending { "activity-item pending" } else { "activity-item" };
                                             view! {
-                                                <li class="activity-item">
+                                                <li class=pending_class>
                                                     <span class="activity-time">{time_ago}</span>
-                                                    <span class="activity-type">{entry_type}</span>
+                                                    <span class="activity-type">{entry_type}{status_label}</span>
                                                     <span class="activity-description">{entry.description.clone()}</span>
                                                     <span class="activity-amount">{sign}{"$"}{entry.amount.to_string()}</span>
                                                 </li>

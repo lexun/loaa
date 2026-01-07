@@ -9,6 +9,6 @@ pub use account::Account;
 pub use account_membership::{AccountMembership, MembershipRole};
 pub use kid::Kid;
 pub use task::{Task, Cadence};
-pub use ledger::{LedgerEntry, EntryType, Ledger};
+pub use ledger::{LedgerEntry, EntryType, Ledger, TransactionStatus};
 pub use user::{User, AccountType};
 
