@@ -121,24 +121,38 @@ fn get_tools() -> Vec<Value> {
 }
 
 /// System prompt for the chat assistant
-fn get_system_prompt() -> String {
-    r#"You are a friendly assistant for Loa'a, a family chore tracking app. You help kids report completed chores and check their balances.
+/// If kid_info is provided (name, id), the assistant knows who is talking
+fn get_system_prompt(kid_info: Option<(&str, &str)>) -> String {
+    let base_prompt = r#"You are a friendly assistant for Loa'a, a family chore tracking app. You help kids report completed chores and check their balances.
 
 Your job is to:
-1. Help kids identify themselves (ask for their name if they don't provide it)
-2. Help them report completed tasks/chores
-3. Tell them how much they earned and their new balance
-4. Be encouraging and positive!
+1. Help them report completed tasks/chores
+2. Tell them how much they earned and their new balance
+3. Be encouraging and positive!
 
-When a kid says they completed a task:
-1. First, use list_kids to find their ID (match by name)
-2. Use list_tasks to find the task they're talking about
-3. Use complete_task to mark it done
-4. Tell them how much they earned!
+When they say they completed a task:
+1. Use list_tasks to find the task they're talking about
+2. Use complete_task to mark it done
+3. Tell them how much they earned!
 
 Keep responses short and friendly - these are kids! Use simple language and be encouraging.
 
-If you can't find a matching kid or task, ask for clarification. Be helpful, not robotic."#.to_string()
+If you can't find a matching task, ask for clarification. Be helpful, not robotic."#;
+
+    match kid_info {
+        Some((name, id)) => {
+            format!(
+                "{}\n\nIMPORTANT: You are talking to {}. Their kid_id is {}. You do NOT need to ask for their name or look them up - use this ID directly when completing tasks or checking balance.",
+                base_prompt, name, id
+            )
+        }
+        None => {
+            format!(
+                "{}\n\nIf the user hasn't identified themselves, ask for their name. Use list_kids to find their ID by matching their name.",
+                base_prompt
+            )
+        }
+    }
 }
 
 /// Execute a tool call and return the result
@@ -264,11 +278,13 @@ async fn execute_tool(
 }
 
 /// Send a chat message and handle the full conversation loop with tool calls
+/// kid_info: Optional (name, id) tuple for the logged-in kid
 pub async fn chat(
     messages: Vec<ChatMessage>,
     state: &AppState,
     account_id: uuid::Uuid,
     is_kid: bool,
+    kid_info: Option<(String, String)>,
 ) -> Result<String> {
     let api_key = std::env::var("ANTHROPIC_API_KEY")
         .map_err(|_| anyhow!("ANTHROPIC_API_KEY not set"))?;
@@ -276,12 +292,18 @@ pub async fn chat(
     let client = reqwest::Client::new();
     let mut conversation = messages;
 
+    // Build system prompt with kid info if available
+    let system_prompt = match &kid_info {
+        Some((name, id)) => get_system_prompt(Some((name, id))),
+        None => get_system_prompt(None),
+    };
+
     loop {
         // Build the request
         let request_body = json!({
             "model": MODEL,
             "max_tokens": 1024,
-            "system": get_system_prompt(),
+            "system": system_prompt,
             "tools": get_tools(),
             "messages": conversation
         });
@@ -425,8 +447,8 @@ pub async fn chat_handler(
         content: MessageContent::Text(request.message),
     });
 
-    // Call Claude with account_id (direct API access defaults to parent role)
-    let response = chat(messages, &state, account_id, false).await
+    // Call Claude with account_id (direct API access defaults to parent role, no kid info)
+    let response = chat(messages, &state, account_id, false, None).await
         .map_err(|e| (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ChatError { error: e.to_string() })

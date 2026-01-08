@@ -565,12 +565,34 @@ pub async fn send_chat_message(
     // Get account_id (works for both parents and kids)
     let account_id = get_account_id().await?;
 
-    // Get membership role from session to determine if this is a kid
+    // Get membership role and linked kid from session
     let session = extract::<Session>().await
         .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
     let membership_role: Option<String> = session.get("membership_role").await
         .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
     let is_kid = membership_role.as_deref() == Some("kid");
+
+    // Get kid info if this is a kid user with a linked kid
+    let kid_info: Option<(String, String)> = if is_kid {
+        let linked_kid_id: Option<String> = session.get("linked_kid_id").await
+            .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+        if let Some(kid_id_str) = linked_kid_id {
+            // Look up the kid's name
+            let kid_repo = KidRepository::new(db.client.clone());
+            let kid_id = Uuid::from_str(&kid_id_str)
+                .map_err(|e| ServerFnError::new(format!("Invalid kid ID: {}", e)))?;
+
+            match kid_repo.get(kid_id).await {
+                Ok(kid) => Some((kid.name, kid_id_str)),
+                Err(_) => None, // Kid not found, proceed without kid info
+            }
+        } else {
+            None // Shared kid account, no specific kid
+        }
+    } else {
+        None // Parent user
+    };
 
     // Create a minimal AppState for the chat function
     // We only need the db and event_sender fields for tool execution
@@ -600,8 +622,8 @@ pub async fn send_chat_message(
         content: MessageContent::Text(message),
     });
 
-    // Call Claude with account_id and role for multi-user support
-    let response = chat(messages, &app_state, account_id, is_kid).await
+    // Call Claude with account_id, role, and kid info for multi-user support
+    let response = chat(messages, &app_state, account_id, is_kid, kid_info).await
         .map_err(|e| ServerFnError::new(format!("Chat error: {}", e)))?;
 
     Ok(response)
