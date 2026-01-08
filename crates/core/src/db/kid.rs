@@ -6,6 +6,7 @@ use crate::error::{Error, Result};
 use uuid::Uuid;
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use base64::Engine;
 
 // Helper struct to handle SurrealDB record with id
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,11 +80,27 @@ impl KidRepository {
 
     pub async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Kid>> {
         // Include kids with matching account_id OR nil account_id (backward compatibility)
+        // Handle native UUID, string-stored UUID, and bytes-stored UUID formats in SurrealDB
+        // Historical data may have account_id stored in different formats due to driver changes
         let nil_uuid = Uuid::nil();
+        let account_id_str = account_id.to_string();
+        let nil_uuid_str = nil_uuid.to_string();
+        // For bytes comparison, use base64 encoding of UUID bytes (no padding to match SurrealDB format)
+        let account_id_b64 = base64::engine::general_purpose::STANDARD_NO_PAD.encode(account_id.as_bytes());
+        let nil_uuid_b64 = base64::engine::general_purpose::STANDARD_NO_PAD.encode(nil_uuid.as_bytes());
         let records: Vec<KidRecord> = self.db
-            .query("SELECT * FROM kid WHERE account_id = $account_id OR account_id = $nil_uuid")
-            .bind(("account_id", account_id))
-            .bind(("nil_uuid", nil_uuid))
+            .query("SELECT * FROM kid WHERE
+                account_id = type::uuid($account_id) OR
+                (type::is::string(account_id) AND account_id = $account_id) OR
+                (account_id IS NOT NONE AND encoding::base64::encode(account_id) = $account_id_b64) OR
+                account_id = type::uuid($nil_uuid) OR
+                (type::is::string(account_id) AND account_id = $nil_uuid) OR
+                (account_id IS NOT NONE AND encoding::base64::encode(account_id) = $nil_uuid_b64) OR
+                account_id IS NONE")
+            .bind(("account_id", account_id_str))
+            .bind(("account_id_b64", account_id_b64))
+            .bind(("nil_uuid", nil_uuid_str))
+            .bind(("nil_uuid_b64", nil_uuid_b64))
             .await?
             .take(0)?;
 

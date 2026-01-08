@@ -22,6 +22,11 @@ name = "migrate_users"
 path = "src/bin/migrate_users.rs"
 required-features = ["ssr"]
 
+[[bin]]
+name = "migrate_kids_tasks"
+path = "src/bin/migrate_kids_tasks.rs"
+required-features = ["ssr"]
+
 [package.metadata.leptos]
 output-name = "loaa-web"
 bin-target = "loaa-web"
