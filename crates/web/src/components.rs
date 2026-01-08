@@ -342,20 +342,24 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
     let (recent_activity, set_recent_activity) = create_signal(Vec::<LedgerEntryDto>::new());
     let (pending_transactions, set_pending_transactions) = create_signal(Vec::<LedgerEntryDto>::new());
 
-    // Kid login management
+    // Kid login management (parent-only)
+    let (is_parent_user, set_is_parent_user) = create_signal(true); // Default to true for loading
     let (kid_logins, set_kid_logins) = create_signal(Vec::<KidLoginDto>::new());
     let (new_kid_username, set_new_kid_username) = create_signal(String::new());
     let (new_kid_password, set_new_kid_password) = create_signal(String::new());
     let (selected_kid_id, set_selected_kid_id) = create_signal(Option::<String>::None);
     let (creating_kid_login, set_creating_kid_login) = create_signal(false);
     let (kid_login_error, set_kid_login_error) = create_signal(Option::<String>::None);
+    let (editing_kid_user_id, set_editing_kid_user_id) = create_signal(Option::<String>::None);
+    let (edit_kid_password, set_edit_kid_password) = create_signal(String::new());
+    let (updating_kid_password, set_updating_kid_password) = create_signal(false);
 
     // Update signals when resource loads
     create_effect(move |_| {
         if let Some(Ok(data)) = dashboard_data.get() {
             set_kid_summaries.set(data.kid_summaries);
             set_is_loaded.set(true);
-            // Also fetch tasks, recent activity, and pending transactions
+            // Also fetch tasks, recent activity, pending transactions, and parent status
             spawn_local(async move {
                 if let Ok(task_list) = get_tasks().await {
                     set_tasks.set(task_list);
@@ -366,8 +370,15 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                 if let Ok(pending) = list_pending_transactions().await {
                     set_pending_transactions.set(pending);
                 }
-                if let Ok(logins) = list_kid_logins().await {
-                    set_kid_logins.set(logins);
+                // Check if user is a parent (controls visibility of parent-only sections)
+                if let Ok(is_parent) = is_parent().await {
+                    set_is_parent_user.set(is_parent);
+                    // Only fetch kid logins for parents
+                    if is_parent {
+                        if let Ok(logins) = list_kid_logins().await {
+                            set_kid_logins.set(logins);
+                        }
+                    }
                 }
             });
         }
@@ -471,10 +482,10 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                     }}
                 </section>
 
-                // Pending transactions section (only shown if there are pending transactions)
+                // Pending transactions section (only shown to parents when there are pending transactions)
                 {move || {
                     let pending = pending_transactions.get();
-                    if pending.is_empty() {
+                    if pending.is_empty() || !is_parent_user.get() {
                         view! { <div></div> }.into_view()
                     } else {
                         view! {
@@ -563,14 +574,13 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                                                 EntryTypeDto::Adjusted => "Adjusted",
                                             };
                                             let is_pending = entry.status == TransactionStatusDto::Pending;
-                                            let status_label = if is_pending { " (pending)" } else { "" };
                                             let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                                             let time_ago = format_time_ago(entry.created_at);
                                             let pending_class = if is_pending { "activity-item pending" } else { "activity-item" };
                                             view! {
                                                 <li class=pending_class>
                                                     <span class="activity-time">{time_ago}</span>
-                                                    <span class="activity-type">{entry_type}{status_label}</span>
+                                                    <span class="activity-type">{entry_type}</span>
                                                     <span class="activity-description">{entry.description.clone()}</span>
                                                     <span class="activity-amount">{sign}{"$"}{entry.amount.to_string()}</span>
                                                 </li>
@@ -584,6 +594,7 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                 </section>
 
                 // Kid Logins section (parent-only feature)
+                <Show when=move || is_parent_user.get()>
                 <section class="kid-logins-section">
                     <h2>"Kid Logins"</h2>
 
@@ -668,11 +679,87 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                             view! {
                                 <div class="kid-logins-list">
                                     {logins.into_iter().map(|login| {
+                                        let user_id = login.user_id.clone();
+                                        let user_id_for_edit = user_id.clone();
+                                        let user_id_for_save = user_id.clone();
+                                        let user_id_for_cancel = user_id.clone();
+                                        let user_id_for_check = user_id.clone();
                                         let linked_name = login.linked_kid_name.clone().unwrap_or_else(|| "(no specific kid)".to_string());
+                                        let username = login.username.clone();
+
                                         view! {
                                             <div class="kid-login-card">
-                                                <span class="kid-login-username">{login.username.clone()}</span>
+                                                <span class="kid-login-username">{username}</span>
                                                 <span class="kid-login-linked">"→ "{linked_name}</span>
+                                                {move || {
+                                                    let is_editing = editing_kid_user_id.get().as_ref() == Some(&user_id_for_check);
+                                                    if is_editing {
+                                                        let user_id_save = user_id_for_save.clone();
+                                                        let user_id_cancel = user_id_for_cancel.clone();
+                                                        view! {
+                                                            <div class="edit-password-form">
+                                                                <input
+                                                                    type="password"
+                                                                    placeholder="New password"
+                                                                    class="edit-password-input"
+                                                                    disabled=move || updating_kid_password.get()
+                                                                    on:input=move |ev| set_edit_kid_password.set(event_target_value(&ev))
+                                                                    prop:value=move || edit_kid_password.get()
+                                                                />
+                                                                <button
+                                                                    class="save-btn"
+                                                                    disabled=move || updating_kid_password.get() || edit_kid_password.get().trim().is_empty()
+                                                                    on:click=move |_| {
+                                                                        let password = edit_kid_password.get().trim().to_string();
+                                                                        let uid = user_id_save.clone();
+                                                                        if password.is_empty() {
+                                                                            return;
+                                                                        }
+                                                                        set_updating_kid_password.set(true);
+                                                                        spawn_local(async move {
+                                                                            match update_kid_password(uid, password).await {
+                                                                                Ok(_) => {
+                                                                                    set_editing_kid_user_id.set(None);
+                                                                                    set_edit_kid_password.set(String::new());
+                                                                                }
+                                                                                Err(e) => {
+                                                                                    set_kid_login_error.set(Some(format!("Failed to update password: {}", e)));
+                                                                                }
+                                                                            }
+                                                                            set_updating_kid_password.set(false);
+                                                                        });
+                                                                    }
+                                                                >
+                                                                    {move || if updating_kid_password.get() { "Saving..." } else { "Save" }}
+                                                                </button>
+                                                                <button
+                                                                    class="cancel-btn"
+                                                                    disabled=move || updating_kid_password.get()
+                                                                    on:click=move |_| {
+                                                                        let _ = &user_id_cancel;
+                                                                        set_editing_kid_user_id.set(None);
+                                                                        set_edit_kid_password.set(String::new());
+                                                                    }
+                                                                >
+                                                                    "Cancel"
+                                                                </button>
+                                                            </div>
+                                                        }.into_view()
+                                                    } else {
+                                                        let user_id_edit = user_id_for_edit.clone();
+                                                        view! {
+                                                            <button
+                                                                class="edit-password-btn"
+                                                                on:click=move |_| {
+                                                                    set_editing_kid_user_id.set(Some(user_id_edit.clone()));
+                                                                    set_edit_kid_password.set(String::new());
+                                                                }
+                                                            >
+                                                                "Edit Password"
+                                                            </button>
+                                                        }.into_view()
+                                                    }
+                                                }}
                                             </div>
                                         }
                                     }).collect::<Vec<_>>()}
@@ -681,6 +768,7 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                         }
                     }}
                 </section>
+                </Show>
             </div>
         </Show>
     }

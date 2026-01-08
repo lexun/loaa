@@ -421,6 +421,20 @@ pub async fn get_account_type() -> Result<AccountTypeDto, ServerFnError> {
     }
 }
 
+/// Check if the current user is a parent (not a kid)
+#[server]
+pub async fn is_parent() -> Result<bool, ServerFnError> {
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role")
+        .await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // User is a parent if their role is "parent" or if they have no role (legacy users)
+    Ok(membership_role.as_deref() != Some("kid"))
+}
+
 // Helper to verify admin access
 #[cfg(feature = "ssr")]
 async fn require_admin() -> Result<(), ServerFnError> {
@@ -712,6 +726,16 @@ pub async fn create_kid_login(
         return Err(ServerFnError::new("Username already exists".to_string()));
     }
 
+    // Check if the kid already has a login (enforce one user per kid)
+    let membership_repo = AccountMembershipRepository::new(db.client.clone());
+    if let Some(kid_id_str) = &linked_kid_id {
+        let kid_id = Uuid::from_str(kid_id_str)
+            .map_err(|e| ServerFnError::new(format!("Invalid kid ID: {}", e)))?;
+        if let Ok(Some(_existing)) = membership_repo.get_by_kid_id(kid_id).await {
+            return Err(ServerFnError::new("This kid already has a login. Delete the existing login first or edit their password.".to_string()));
+        }
+    }
+
     // Hash password
     let password_hash = hash_password(&password)
         .map_err(|e| ServerFnError::new(format!("Failed to hash password: {}", e)))?;
@@ -725,7 +749,6 @@ pub async fn create_kid_login(
         .map_err(|e| ServerFnError::new(format!("Failed to save user: {}", e)))?;
 
     // Create AccountMembership with Kid role
-    let membership_repo = AccountMembershipRepository::new(db.client.clone());
     let membership = if let Some(kid_id_str) = linked_kid_id {
         let kid_id = Uuid::from_str(&kid_id_str)
             .map_err(|e| ServerFnError::new(format!("Invalid kid ID: {}", e)))?;
@@ -804,6 +827,75 @@ pub async fn list_kid_logins() -> Result<Vec<KidLoginDto>, ServerFnError> {
     }
 
     Ok(kid_logins)
+}
+
+/// Update a kid login's password (parent only)
+#[server]
+pub async fn update_kid_password(user_id: UuidDto, new_password: String) -> Result<(), ServerFnError> {
+    let db = get_db().await?;
+
+    // Get session to check membership role
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    // Only parents can update kid passwords
+    if membership_role.as_deref() == Some("kid") {
+        return Err(ServerFnError::new("Only parents can update kid passwords".to_string()));
+    }
+
+    let parent_user_id_str: Option<String> = session.get("user_id").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+
+    let parent_user_id_str = parent_user_id_str.ok_or_else(|| ServerFnError::new("Not logged in".to_string()))?;
+
+    if parent_user_id_str == "admin" {
+        return Err(ServerFnError::new("Admin cannot update kid passwords".to_string()));
+    }
+
+    let parent_user_id = Uuid::from_str(&parent_user_id_str)
+        .map_err(|e| ServerFnError::new(format!("Invalid user ID: {}", e)))?;
+
+    // Get the parent user to get account_id
+    let user_repo = UserRepository::new(db.client.clone());
+    let parent_user = user_repo.get(parent_user_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to get user: {}", e)))?;
+
+    // Parse the kid user ID
+    let kid_user_id = Uuid::from_str(&user_id)
+        .map_err(|e| ServerFnError::new(format!("Invalid user ID: {}", e)))?;
+
+    // Get the kid user and verify they belong to the same account
+    let kid_user = user_repo.get(kid_user_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to get kid user: {}", e)))?;
+
+    if kid_user.account_id != parent_user.account_id {
+        return Err(ServerFnError::new("Cannot update password for user in different account".to_string()));
+    }
+
+    // Verify this user is actually a kid (has kid membership)
+    let membership_repo = AccountMembershipRepository::new(db.client.clone());
+    let membership = membership_repo.get_by_user_and_account(kid_user_id, parent_user.account_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to get membership: {}", e)))?;
+
+    if !membership.is_kid() {
+        return Err(ServerFnError::new("Cannot update password for non-kid user".to_string()));
+    }
+
+    // Hash the new password
+    let password_hash = hash_password(&new_password)
+        .map_err(|e| ServerFnError::new(format!("Failed to hash password: {}", e)))?;
+
+    // Update the user
+    let mut updated_user = kid_user;
+    updated_user.password_hash = password_hash;
+    user_repo.update(updated_user).await
+        .map_err(|e| ServerFnError::new(format!("Failed to update user: {}", e)))?;
+
+    eprintln!("✅ Updated password for kid user: {}", user_id);
+    Ok(())
 }
 
 /// Reject a pending transaction (parent only)

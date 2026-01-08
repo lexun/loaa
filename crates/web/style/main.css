@@ -1137,4 +1137,68 @@ li {
 .kid-login-linked {
     color: #64748b;
     font-size: 0.9em;
+    flex: 1;
+}
+
+.edit-password-btn {
+    padding: 4px 12px;
+    font-size: 0.85em;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    color: #475569;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.edit-password-btn:hover {
+    background: #e2e8f0;
+}
+
+.edit-password-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+}
+
+.edit-password-input {
+    padding: 4px 8px;
+    font-size: 0.85em;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    width: 120px;
+}
+
+.save-btn {
+    padding: 4px 10px;
+    font-size: 0.85em;
+    background: #10b981;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+}
+
+.save-btn:hover:not(:disabled) {
+    background: #059669;
+}
+
+.save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.cancel-btn {
+    padding: 4px 10px;
+    font-size: 0.85em;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    color: #475569;
+    cursor: pointer;
+}
+
+.cancel-btn:hover:not(:disabled) {
+    background: #e2e8f0;
 }

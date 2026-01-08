@@ -17,6 +17,11 @@ name = "seed"
 path = "src/bin/seed.rs"
 required-features = ["ssr"]
 
+[[bin]]
+name = "migrate_users"
+path = "src/bin/migrate_users.rs"
+required-features = ["ssr"]
+
 [package.metadata.leptos]
 output-name = "loaa-web"
 bin-target = "loaa-web"

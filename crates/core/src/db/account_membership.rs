@@ -128,4 +128,16 @@ impl AccountMembershipRepository {
             .await?;
         Ok(())
     }
+
+    /// Check if a kid already has a user login linked to them
+    pub async fn get_by_kid_id(&self, kid_id: Uuid) -> Result<Option<AccountMembership>> {
+        let records: Vec<MembershipRecord> = self
+            .db
+            .query("SELECT * FROM account_membership WHERE kid_id = $kid_id LIMIT 1")
+            .bind(("kid_id", kid_id))
+            .await?
+            .take(0)?;
+
+        Ok(records.into_iter().next().map(|rec| rec.into_membership()))
+    }
 }
