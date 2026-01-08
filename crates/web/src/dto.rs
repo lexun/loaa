@@ -116,6 +116,7 @@ pub struct KidLoginDto {
     pub user_id: UuidDto,
     pub username: String,
     pub linked_kid_id: Option<UuidDto>,
+    pub linked_kid_name: Option<String>,
 }
 
 // Conversion functions (only available on server side)

@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use crate::oauth::AppState;
 use loaa_core::db::{KidRepository, TaskRepository, LedgerRepository};
 use loaa_core::events::{DataEvent, broadcast_event};
-use loaa_core::models::Cadence;
+use loaa_core::models::{Cadence, TransactionStatus};
 use loaa_core::workflows::TaskCompletionWorkflow;
 
 const CLAUDE_API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -146,12 +146,13 @@ async fn execute_tool(
     name: &str,
     input: &Value,
     state: &AppState,
-    owner_id: &str,
+    account_id: uuid::Uuid,
+    is_kid: bool,
 ) -> Result<String> {
     match name {
         "list_kids" => {
             let kid_repo = KidRepository::new(state.db.client.clone());
-            let kids = kid_repo.list_by_owner(owner_id).await?;
+            let kids = kid_repo.list_by_account(account_id).await?;
             let result: Vec<Value> = kids
                 .iter()
                 .map(|k| json!({
@@ -164,8 +165,8 @@ async fn execute_tool(
         "list_tasks" => {
             let task_repo = TaskRepository::new(state.db.client.clone());
             let kid_repo = KidRepository::new(state.db.client.clone());
-            let tasks = task_repo.list_by_owner(owner_id).await?;
-            let kids = kid_repo.list_by_owner(owner_id).await?;
+            let tasks = task_repo.list_by_account(account_id).await?;
+            let kids = kid_repo.list_by_account(account_id).await?;
 
             // Build a map of kid IDs to names for resolving completed_by
             let kid_names: std::collections::HashMap<uuid::Uuid, String> = kids
@@ -217,7 +218,13 @@ async fn execute_tool(
                 LedgerRepository::new(state.db.client.clone()),
             );
 
-            let entry = workflow.complete_task(task_uuid, kid_uuid).await?;
+            // Kids create pending entries, parents create confirmed entries
+            let status = if is_kid {
+                TransactionStatus::Pending
+            } else {
+                TransactionStatus::Confirmed
+            };
+            let entry = workflow.complete_task_with_status(task_uuid, kid_uuid, status, None).await?;
 
             // Broadcast SSE event for live dashboard updates
             if let Some(ref tx) = state.event_sender {
@@ -260,7 +267,8 @@ async fn execute_tool(
 pub async fn chat(
     messages: Vec<ChatMessage>,
     state: &AppState,
-    owner_id: &str,
+    account_id: uuid::Uuid,
+    is_kid: bool,
 ) -> Result<String> {
     let api_key = std::env::var("ANTHROPIC_API_KEY")
         .map_err(|_| anyhow!("ANTHROPIC_API_KEY not set"))?;
@@ -312,7 +320,7 @@ pub async fn chat(
             let mut tool_results = Vec::new();
             for block in &claude_response.content {
                 if let ContentBlock::ToolUse { id, name, input } = block {
-                    let result = match execute_tool(name, input, state, owner_id).await {
+                    let result = match execute_tool(name, input, state, account_id, is_kid).await {
                         Ok(r) => r,
                         Err(e) => json!({"error": e.to_string()}).to_string(),
                     };
@@ -395,13 +403,11 @@ pub async fn chat_handler(
     State(state): State<AppState>,
     Json(request): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (StatusCode, Json<ChatError>)> {
-    // Get owner_id from session or use a default for now
-    // TODO: Get from session when kid authentication is implemented
-    // For now, we'll use the first user in the database
-    let owner_id = get_default_owner_id(&state).await
+    // Get account_id from the first user (fallback for direct API access)
+    let account_id = get_default_account_id(&state).await
         .map_err(|e| (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ChatError { error: format!("Failed to get owner: {}", e) })
+            Json(ChatError { error: format!("Failed to get account: {}", e) })
         ))?;
 
     // Build conversation from history + new message
@@ -419,8 +425,8 @@ pub async fn chat_handler(
         content: MessageContent::Text(request.message),
     });
 
-    // Call Claude
-    let response = chat(messages, &state, &owner_id).await
+    // Call Claude with account_id (direct API access defaults to parent role)
+    let response = chat(messages, &state, account_id, false).await
         .map_err(|e| (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ChatError { error: e.to_string() })
@@ -429,15 +435,15 @@ pub async fn chat_handler(
     Ok(Json(ChatResponse { response }))
 }
 
-/// Get default owner ID (first user in database)
-/// This is temporary until we implement kid sessions
-async fn get_default_owner_id(state: &AppState) -> Result<String> {
+/// Get default account ID (from first user in database)
+/// This is a fallback for direct API access without session
+async fn get_default_account_id(state: &AppState) -> Result<uuid::Uuid> {
     use loaa_core::db::UserRepository;
 
     let user_repo = UserRepository::new(state.db.client.clone());
     let users = user_repo.list().await?;
 
     users.first()
-        .map(|u| u.id.to_string())
+        .map(|u| u.account_id)
         .ok_or_else(|| anyhow!("No users found in database"))
 }

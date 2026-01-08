@@ -342,6 +342,14 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
     let (recent_activity, set_recent_activity) = create_signal(Vec::<LedgerEntryDto>::new());
     let (pending_transactions, set_pending_transactions) = create_signal(Vec::<LedgerEntryDto>::new());
 
+    // Kid login management
+    let (kid_logins, set_kid_logins) = create_signal(Vec::<KidLoginDto>::new());
+    let (new_kid_username, set_new_kid_username) = create_signal(String::new());
+    let (new_kid_password, set_new_kid_password) = create_signal(String::new());
+    let (selected_kid_id, set_selected_kid_id) = create_signal(Option::<String>::None);
+    let (creating_kid_login, set_creating_kid_login) = create_signal(false);
+    let (kid_login_error, set_kid_login_error) = create_signal(Option::<String>::None);
+
     // Update signals when resource loads
     create_effect(move |_| {
         if let Some(Ok(data)) = dashboard_data.get() {
@@ -357,6 +365,9 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                 }
                 if let Ok(pending) = list_pending_transactions().await {
                     set_pending_transactions.set(pending);
+                }
+                if let Ok(logins) = list_kid_logins().await {
+                    set_kid_logins.set(logins);
                 }
             });
         }
@@ -393,6 +404,9 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                         }
                         if let Ok(pending) = list_pending_transactions().await {
                             set_pending_transactions.set(pending);
+                        }
+                        if let Ok(logins) = list_kid_logins().await {
+                            set_kid_logins.set(logins);
                         }
                     });
                 });
@@ -564,6 +578,105 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                                         }
                                     />
                                 </ul>
+                            }.into_view()
+                        }
+                    }}
+                </section>
+
+                // Kid Logins section (parent-only feature)
+                <section class="kid-logins-section">
+                    <h2>"Kid Logins"</h2>
+
+                    {move || kid_login_error.get().map(|err| view! {
+                        <div class="error-banner">{err}</div>
+                    })}
+
+                    <div class="create-kid-login">
+                        <h3>"Create Kid Login"</h3>
+                        <div class="form-row">
+                            <input
+                                type="text"
+                                placeholder="Username"
+                                disabled=move || creating_kid_login.get()
+                                on:input=move |ev| set_new_kid_username.set(event_target_value(&ev))
+                                prop:value=move || new_kid_username.get()
+                            />
+                            <input
+                                type="password"
+                                placeholder="Password"
+                                disabled=move || creating_kid_login.get()
+                                on:input=move |ev| set_new_kid_password.set(event_target_value(&ev))
+                                prop:value=move || new_kid_password.get()
+                            />
+                            <select
+                                disabled=move || creating_kid_login.get()
+                                on:change=move |ev| {
+                                    let val = event_target_value(&ev);
+                                    set_selected_kid_id.set(if val.is_empty() { None } else { Some(val) });
+                                }
+                            >
+                                <option value="">"(No specific kid)"</option>
+                                {move || kid_summaries.get().into_iter().map(|kid| {
+                                    view! {
+                                        <option value=kid.kid.id.clone()>{kid.kid.name.clone()}</option>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </select>
+                            <button
+                                class="create-btn"
+                                disabled=move || creating_kid_login.get() || new_kid_username.get().trim().is_empty() || new_kid_password.get().trim().is_empty()
+                                on:click=move |_| {
+                                    let username = new_kid_username.get().trim().to_string();
+                                    let password = new_kid_password.get().trim().to_string();
+                                    let kid_id = selected_kid_id.get();
+
+                                    if username.is_empty() || password.is_empty() {
+                                        return;
+                                    }
+
+                                    set_creating_kid_login.set(true);
+                                    set_kid_login_error.set(None);
+
+                                    spawn_local(async move {
+                                        match create_kid_login(username, password, kid_id).await {
+                                            Ok(_) => {
+                                                set_new_kid_username.set(String::new());
+                                                set_new_kid_password.set(String::new());
+                                                set_selected_kid_id.set(None);
+                                                if let Ok(logins) = list_kid_logins().await {
+                                                    set_kid_logins.set(logins);
+                                                }
+                                            }
+                                            Err(e) => {
+                                                set_kid_login_error.set(Some(format!("Failed to create login: {}", e)));
+                                            }
+                                        }
+                                        set_creating_kid_login.set(false);
+                                    });
+                                }
+                            >
+                                {move || if creating_kid_login.get() { "Creating..." } else { "Create" }}
+                            </button>
+                        </div>
+                    </div>
+
+                    {move || {
+                        let logins = kid_logins.get();
+                        if logins.is_empty() {
+                            view! { <p class="empty-state">"No kid logins yet."</p> }.into_view()
+                        } else {
+                            view! {
+                                <div class="kid-logins-list">
+                                    {logins.into_iter().map(|login| {
+                                        let linked_name = login.linked_kid_name.clone().unwrap_or_else(|| "(no specific kid)".to_string());
+                                        view! {
+                                            <div class="kid-login-card">
+                                                <span class="kid-login-username">{login.username.clone()}</span>
+                                                <span class="kid-login-linked">"→ "{linked_name}</span>
+                                            </div>
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
                             }.into_view()
                         }
                     }}

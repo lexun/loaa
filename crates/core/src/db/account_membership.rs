@@ -66,8 +66,8 @@ impl AccountMembershipRepository {
         let records: Vec<MembershipRecord> = self
             .db
             .query("SELECT * FROM account_membership WHERE user_id = $user_id AND account_id = $account_id LIMIT 1")
-            .bind(("user_id", user_id.to_string()))
-            .bind(("account_id", account_id.to_string()))
+            .bind(("user_id", user_id))
+            .bind(("account_id", account_id))
             .await?
             .take(0)?;
 
@@ -88,7 +88,7 @@ impl AccountMembershipRepository {
         let records: Vec<MembershipRecord> = self
             .db
             .query("SELECT * FROM account_membership WHERE user_id = $user_id")
-            .bind(("user_id", user_id.to_string()))
+            .bind(("user_id", user_id))
             .await?
             .take(0)?;
 
@@ -103,7 +103,7 @@ impl AccountMembershipRepository {
         let records: Vec<MembershipRecord> = self
             .db
             .query("SELECT * FROM account_membership WHERE account_id = $account_id")
-            .bind(("account_id", account_id.to_string()))
+            .bind(("account_id", account_id))
             .await?
             .take(0)?;
 

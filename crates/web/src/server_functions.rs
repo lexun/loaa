@@ -64,11 +64,13 @@ pub async fn get_db() -> Result<Arc<Database>, ServerFnError> {
 
 #[server]
 pub async fn get_kids() -> Result<Vec<KidDto>, ServerFnError> {
-    let owner_id = get_owner_id().await?;
+    let account_id = get_account_id().await?;
+    eprintln!("🔍 get_kids: account_id = {}", account_id);
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
-    let kids = kid_repo.list_by_owner(&owner_id).await
+    let kids = kid_repo.list_by_account(account_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
+    eprintln!("🔍 get_kids: found {} kids", kids.len());
     Ok(kids.into_iter().map(Into::into).collect())
 }
 
@@ -87,10 +89,10 @@ pub async fn create_kid(name: String) -> Result<KidDto, ServerFnError> {
 
 #[server]
 pub async fn get_tasks() -> Result<Vec<TaskDto>, ServerFnError> {
-    let owner_id = get_owner_id().await?;
+    let account_id = get_account_id().await?;
     let db = get_db().await?;
     let task_repo = TaskRepository::new(db.client.clone());
-    let tasks = task_repo.list_by_owner(&owner_id).await
+    let tasks = task_repo.list_by_account(account_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list tasks: {}", e)))?;
     Ok(tasks.into_iter().map(Into::into).collect())
 }
@@ -165,17 +167,28 @@ pub async fn get_ledger(kid_id: UuidDto) -> Result<LedgerDto, ServerFnError> {
 
 #[server]
 pub async fn get_dashboard_data() -> Result<DashboardDataDto, ServerFnError> {
-    let owner_id = get_owner_id().await?;
+    let account_id = get_account_id().await?;
+    eprintln!("🔍 get_dashboard_data: account_id = {}", account_id);
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
     let task_repo = TaskRepository::new(db.client.clone());
     let ledger_repo = LedgerRepository::new(db.client.clone());
 
-    let kids = kid_repo.list_by_owner(&owner_id).await
-        .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
+    // Debug: list ALL kids first to see if any exist
+    let all_kids = kid_repo.list().await
+        .map_err(|e| ServerFnError::new(format!("Failed to list all kids: {}", e)))?;
+    eprintln!("🔍 get_dashboard_data: total kids in DB = {}", all_kids.len());
+    for k in &all_kids {
+        eprintln!("🔍   kid: {} account_id={}", k.name, k.account_id);
+    }
 
-    let tasks = task_repo.list_by_owner(&owner_id).await
+    let kids = kid_repo.list_by_account(account_id).await
+        .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
+    eprintln!("🔍 get_dashboard_data: found {} kids for account {}", kids.len(), account_id);
+
+    let tasks = task_repo.list_by_account(account_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list tasks: {}", e)))?;
+    eprintln!("🔍 get_dashboard_data: found {} tasks", tasks.len());
 
     let mut kid_summaries = Vec::new();
     for kid in kids.iter() {
@@ -200,12 +213,12 @@ pub async fn get_dashboard_data() -> Result<DashboardDataDto, ServerFnError> {
 
 #[server]
 pub async fn get_recent_activity(limit: usize) -> Result<Vec<LedgerEntryDto>, ServerFnError> {
-    let owner_id = get_owner_id().await?;
+    let account_id = get_account_id().await?;
     let db = get_db().await?;
     let kid_repo = KidRepository::new(db.client.clone());
     let ledger_repo = LedgerRepository::new(db.client.clone());
 
-    let kids = kid_repo.list_by_owner(&owner_id).await
+    let kids = kid_repo.list_by_account(account_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
 
     let mut all_entries = Vec::new();
@@ -535,8 +548,15 @@ pub async fn send_chat_message(
     // Get database connection
     let db = get_db().await?;
 
-    // Get the owner_id from session
-    let owner_id = get_owner_id().await?;
+    // Get account_id (works for both parents and kids)
+    let account_id = get_account_id().await?;
+
+    // Get membership role from session to determine if this is a kid
+    let session = extract::<Session>().await
+        .map_err(|e| ServerFnError::new(format!("Failed to extract session: {}", e)))?;
+    let membership_role: Option<String> = session.get("membership_role").await
+        .map_err(|e| ServerFnError::new(format!("Session error: {}", e)))?;
+    let is_kid = membership_role.as_deref() == Some("kid");
 
     // Create a minimal AppState for the chat function
     // We only need the db and event_sender fields for tool execution
@@ -566,8 +586,8 @@ pub async fn send_chat_message(
         content: MessageContent::Text(message),
     });
 
-    // Call Claude
-    let response = chat(messages, &app_state, &owner_id).await
+    // Call Claude with account_id and role for multi-user support
+    let response = chat(messages, &app_state, account_id, is_kid).await
         .map_err(|e| ServerFnError::new(format!("Chat error: {}", e)))?;
 
     Ok(response)
@@ -581,7 +601,7 @@ pub async fn send_chat_message(
 /// Only parents can see pending transactions
 #[server]
 pub async fn list_pending_transactions() -> Result<Vec<LedgerEntryDto>, ServerFnError> {
-    let owner_id = get_owner_id().await?;
+    let account_id = get_account_id().await?;
     let db = get_db().await?;
 
     // Get session to check membership role
@@ -596,9 +616,9 @@ pub async fn list_pending_transactions() -> Result<Vec<LedgerEntryDto>, ServerFn
         return Ok(Vec::new());
     }
 
-    // Get all kids for this owner
+    // Get all kids for this account
     let kid_repo = KidRepository::new(db.client.clone());
-    let kids = kid_repo.list_by_owner(&owner_id).await
+    let kids = kid_repo.list_by_account(account_id).await
         .map_err(|e| ServerFnError::new(format!("Failed to list kids: {}", e)))?;
 
     let kid_ids: Vec<Uuid> = kids.iter().map(|k| k.id).collect();
@@ -761,14 +781,23 @@ pub async fn list_kid_logins() -> Result<Vec<KidLoginDto>, ServerFnError> {
         .map_err(|e| ServerFnError::new(format!("Failed to list memberships: {}", e)))?;
 
     // Filter for kid memberships and get user info
+    let kid_repo = KidRepository::new(db.client.clone());
     let mut kid_logins = Vec::new();
     for membership in memberships {
         if membership.is_kid() {
             if let Ok(user) = user_repo.get(membership.user_id).await {
+                // Look up kid name if linked
+                let linked_kid_name = if let Some(kid_id) = membership.kid_id {
+                    kid_repo.get(kid_id).await.ok().map(|kid| kid.name)
+                } else {
+                    None
+                };
+
                 kid_logins.push(KidLoginDto {
                     user_id: user.id.to_string(),
                     username: user.username,
                     linked_kid_id: membership.kid_id.map(|id| id.to_string()),
+                    linked_kid_name,
                 });
             }
         }

@@ -78,9 +78,10 @@ impl KidRepository {
     }
 
     pub async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Kid>> {
+        // Pass Uuid directly - surrealdb will serialize it the same way as the stored field
         let records: Vec<KidRecord> = self.db
             .query("SELECT * FROM kid WHERE account_id = $account_id")
-            .bind(("account_id", account_id.to_string()))
+            .bind(("account_id", account_id))
             .await?
             .take(0)?;
 

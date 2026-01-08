@@ -1057,3 +1057,84 @@ li {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Kid Logins Section */
+.kid-logins-section {
+    margin-top: 30px;
+}
+
+.kid-logins-section h2 {
+    color: #1e293b;
+    margin-bottom: 16px;
+    font-size: 1.3em;
+}
+
+.kid-logins-section h3 {
+    color: #475569;
+    margin-bottom: 12px;
+    font-size: 1.1em;
+}
+
+.create-kid-login {
+    background: #f8fafc;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.create-kid-login .form-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.create-kid-login input,
+.create-kid-login select {
+    flex: 1;
+    min-width: 150px;
+    padding: 10px 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+}
+
+.create-kid-login input:focus,
+.create-kid-login select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.create-kid-login input:disabled,
+.create-kid-login select:disabled {
+    background: #f1f5f9;
+    cursor: not-allowed;
+}
+
+.kid-logins-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.kid-login-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.kid-login-username {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.kid-login-linked {
+    color: #64748b;
+    font-size: 0.9em;
+}
