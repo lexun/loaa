@@ -78,10 +78,12 @@ impl TaskRepository {
     }
 
     pub async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Task>> {
-        // Pass Uuid directly - surrealdb will serialize it the same way as the stored field
+        // Include tasks with matching account_id OR nil account_id (backward compatibility)
+        let nil_uuid = Uuid::nil();
         let records: Vec<TaskRecord> = self.db
-            .query("SELECT * FROM task WHERE account_id = $account_id")
+            .query("SELECT * FROM task WHERE account_id = $account_id OR account_id = $nil_uuid")
             .bind(("account_id", account_id))
+            .bind(("nil_uuid", nil_uuid))
             .await?
             .take(0)?;
 

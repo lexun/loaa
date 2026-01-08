@@ -78,10 +78,12 @@ impl KidRepository {
     }
 
     pub async fn list_by_account(&self, account_id: Uuid) -> Result<Vec<Kid>> {
-        // Pass Uuid directly - surrealdb will serialize it the same way as the stored field
+        // Include kids with matching account_id OR nil account_id (backward compatibility)
+        let nil_uuid = Uuid::nil();
         let records: Vec<KidRecord> = self.db
-            .query("SELECT * FROM kid WHERE account_id = $account_id")
+            .query("SELECT * FROM kid WHERE account_id = $account_id OR account_id = $nil_uuid")
             .bind(("account_id", account_id))
+            .bind(("nil_uuid", nil_uuid))
             .await?
             .take(0)?;
 
