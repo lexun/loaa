@@ -134,7 +134,7 @@ impl AccountMembershipRepository {
         let records: Vec<MembershipRecord> = self
             .db
             .query("SELECT * FROM account_membership WHERE kid_id = $kid_id LIMIT 1")
-            .bind(("kid_id", kid_id))
+            .bind(("kid_id", kid_id.to_string()))
             .await?
             .take(0)?;
 
