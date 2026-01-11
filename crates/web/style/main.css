@@ -1202,3 +1202,212 @@ li {
 .cancel-btn:hover:not(:disabled) {
     background: #e2e8f0;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .container {
+        padding: 12px;
+    }
+
+    main {
+        padding: 16px;
+        border-radius: 12px;
+    }
+
+    /* Activity list - stack vertically on mobile */
+    .activity-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px;
+    }
+
+    .activity-item .activity-time {
+        font-size: 0.8em;
+        order: 3;
+    }
+
+    .activity-item .activity-type {
+        align-self: flex-start;
+        order: 1;
+    }
+
+    .activity-item .activity-description {
+        order: 2;
+        font-size: 0.95em;
+    }
+
+    .activity-item .activity-amount {
+        order: 1;
+        position: absolute;
+        right: 12px;
+        top: 12px;
+    }
+
+    .activity-item {
+        position: relative;
+    }
+
+    /* Pending items - stack on mobile */
+    .pending-item {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .pending-item .pending-time {
+        font-size: 0.8em;
+        order: 3;
+    }
+
+    .pending-item .pending-description {
+        order: 1;
+    }
+
+    .pending-item .pending-amount {
+        order: 2;
+    }
+
+    .pending-item .pending-actions {
+        order: 4;
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    /* Ledger table - horizontal scroll on mobile */
+    .transactions {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .ledger-table {
+        min-width: 600px;
+    }
+
+    /* Kid cards */
+    .kids-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Tasks grid */
+    .tasks-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Kid logins form - stack on mobile */
+    .create-kid-login .form-row {
+        flex-direction: column;
+    }
+
+    .create-kid-login input,
+    .create-kid-login select {
+        width: 100%;
+    }
+
+    .create-kid-login .create-btn {
+        width: 100%;
+    }
+
+    /* Kid login cards - stack content */
+    .kid-login-card {
+        flex-wrap: wrap;
+    }
+
+    .edit-password-form {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 8px;
+        flex-wrap: wrap;
+    }
+
+    .edit-password-input {
+        flex: 1;
+        min-width: 100px;
+    }
+
+    /* Admin form */
+    .create-account-form .form-row {
+        flex-direction: column;
+    }
+
+    .create-account-form input {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .create-account-form .create-btn {
+        width: 100%;
+    }
+
+    /* Chat widget - full width on small screens */
+    .chat-window {
+        width: calc(100vw - 48px);
+        right: -12px;
+    }
+
+    /* Navbar */
+    .navbar {
+        padding: 12px 16px;
+    }
+
+    .navbar-brand {
+        font-size: 1.3em;
+    }
+
+    /* Balance display */
+    .balance-display {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .balance-value {
+        font-size: 1.6em;
+    }
+
+    /* Ledger header */
+    .ledger-header {
+        margin-bottom: 20px;
+    }
+
+    .back-btn {
+        padding: 8px 16px;
+        font-size: 0.9em;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 400px) {
+    .container {
+        padding: 8px;
+    }
+
+    main {
+        padding: 12px;
+    }
+
+    .kid-card {
+        padding: 16px;
+    }
+
+    .task-card {
+        padding: 14px;
+    }
+
+    .chat-toggle {
+        width: 52px;
+        height: 52px;
+        font-size: 20px;
+    }
+
+    .chat-widget {
+        bottom: 16px;
+        right: 16px;
+    }
+
+    .chat-window {
+        width: calc(100vw - 32px);
+        right: -8px;
+        height: 420px;
+    }
+}
