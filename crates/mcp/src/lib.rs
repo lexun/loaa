@@ -9,7 +9,7 @@ use anyhow::Result;
 use loaa_core::db::{init_database_with_config, Database, KidRepository, LedgerRepository, TaskRepository, PenaltyRepository, UserRepository};
 use loaa_core::config::DatabaseConfig;
 use loaa_core::events::{DataEvent, EventSender, broadcast_event};
-use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Penalty, Task};
+use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Penalty, Task, AdjustmentType};
 use loaa_core::workflows::TaskCompletionWorkflow;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -119,6 +119,9 @@ struct AdjustBalanceParams {
     amount: String,
     #[schemars(description = "Description of the adjustment")]
     description: String,
+    #[schemars(description = "Type of adjustment: 'purchase', 'cash_withdrawal', 'bonus', 'correction', or 'other'. Defaults to 'other' if not provided.")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    adjustment_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -606,17 +609,30 @@ impl LoaaServer {
         let response = json!({
             "kid_id": ledger.kid_id.to_string(),
             "balance": ledger.balance.to_string(),
-            "entries": ledger.entries.iter().map(|e| json!({
-                "id": e.id.to_string(),
-                "amount": e.amount.to_string(),
-                "entry_type": match e.entry_type {
-                    EntryType::Earned => "earned",
-                    EntryType::Adjusted => "adjusted",
-                    EntryType::Penalty => "penalty"
-                },
-                "description": e.description,
-                "created_at": e.created_at.to_rfc3339()
-            })).collect::<Vec<_>>()
+            "entries": ledger.entries.iter().map(|e| {
+                let mut entry_json = json!({
+                    "id": e.id.to_string(),
+                    "amount": e.amount.to_string(),
+                    "entry_type": match e.entry_type {
+                        EntryType::Earned => "earned",
+                        EntryType::Adjusted => "adjusted",
+                        EntryType::Penalty => "penalty"
+                    },
+                    "description": e.description,
+                    "created_at": e.created_at.to_rfc3339()
+                });
+                // Include adjustment_type for adjusted entries
+                if let Some(adj_type) = &e.adjustment_type {
+                    entry_json["adjustment_type"] = json!(match adj_type {
+                        AdjustmentType::Purchase => "purchase",
+                        AdjustmentType::CashWithdrawal => "cash_withdrawal",
+                        AdjustmentType::Bonus => "bonus",
+                        AdjustmentType::Correction => "correction",
+                        AdjustmentType::Other => "other",
+                    });
+                }
+                entry_json
+            }).collect::<Vec<_>>()
         });
 
         Ok(CallToolResult::success(vec![Content::text(
@@ -636,8 +652,23 @@ impl LoaaServer {
             McpError::invalid_request(format!("Invalid amount format: {}", e), None)
         })?;
 
+        // Parse adjustment type
+        let adjustment_type = match params.adjustment_type.as_deref() {
+            Some("purchase") => AdjustmentType::Purchase,
+            Some("cash_withdrawal") | Some("cashwithdrawal") | Some("cash-withdrawal") => AdjustmentType::CashWithdrawal,
+            Some("bonus") => AdjustmentType::Bonus,
+            Some("correction") => AdjustmentType::Correction,
+            Some("other") | None => AdjustmentType::Other,
+            Some(other) => {
+                return Err(McpError::invalid_request(
+                    format!("Invalid adjustment type '{}'. Must be: purchase, cash_withdrawal, bonus, correction, or other", other),
+                    None,
+                ))
+            }
+        };
+
         let description = params.description.clone();
-        let entry = LedgerEntry::adjusted(kid_uuid, amount_dec, params.description);
+        let entry = LedgerEntry::adjusted_with_type(kid_uuid, amount_dec, params.description, adjustment_type);
         let ledger_repo = self.ledger_repo.read().await;
         let created = ledger_repo.create_entry(entry).await.map_err(|e| {
             McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
@@ -650,6 +681,14 @@ impl LoaaServer {
             description,
         });
 
+        let adjustment_type_str = match adjustment_type {
+            AdjustmentType::Purchase => "purchase",
+            AdjustmentType::CashWithdrawal => "cash_withdrawal",
+            AdjustmentType::Bonus => "bonus",
+            AdjustmentType::Correction => "correction",
+            AdjustmentType::Other => "other",
+        };
+
         let response = json!({
             "success": true,
             "ledger_entry": {
@@ -657,6 +696,7 @@ impl LoaaServer {
                 "kid_id": created.kid_id.to_string(),
                 "amount": created.amount.to_string(),
                 "entry_type": "adjusted",
+                "adjustment_type": adjustment_type_str,
                 "description": created.description,
                 "created_at": created.created_at.to_rfc3339()
             }

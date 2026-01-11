@@ -55,6 +55,7 @@ pub struct LedgerEntryDto {
     pub entry_type: EntryTypeDto,
     pub status: TransactionStatusDto,
     pub task_id: Option<UuidDto>,
+    pub adjustment_type: Option<AdjustmentTypeDto>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -64,6 +65,16 @@ pub enum EntryTypeDto {
     Earned,
     Adjusted,
     Penalty,
+}
+
+// AdjustmentType DTO
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AdjustmentTypeDto {
+    Purchase,
+    CashWithdrawal,
+    Bonus,
+    Correction,
+    Other,
 }
 
 // Ledger DTO
@@ -190,7 +201,20 @@ pub mod convert {
                 entry_type: entry.entry_type.into(),
                 status: entry.status.into(),
                 task_id: entry.task_id.map(|id| id.to_string()),
+                adjustment_type: entry.adjustment_type.map(|t| t.into()),
                 created_at: entry.created_at,
+            }
+        }
+    }
+
+    impl From<AdjustmentType> for AdjustmentTypeDto {
+        fn from(adj_type: AdjustmentType) -> Self {
+            match adj_type {
+                AdjustmentType::Purchase => AdjustmentTypeDto::Purchase,
+                AdjustmentType::CashWithdrawal => AdjustmentTypeDto::CashWithdrawal,
+                AdjustmentType::Bonus => AdjustmentTypeDto::Bonus,
+                AdjustmentType::Correction => AdjustmentTypeDto::Correction,
+                AdjustmentType::Other => AdjustmentTypeDto::Other,
             }
         }
     }

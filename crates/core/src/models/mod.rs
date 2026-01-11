@@ -11,6 +11,6 @@ pub use account_membership::{AccountMembership, MembershipRole};
 pub use kid::Kid;
 pub use task::{Task, Cadence};
 pub use penalty::Penalty;
-pub use ledger::{LedgerEntry, EntryType, Ledger, TransactionStatus};
+pub use ledger::{LedgerEntry, EntryType, Ledger, TransactionStatus, AdjustmentType};
 pub use user::{User, AccountType};
 

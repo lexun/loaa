@@ -34,6 +34,9 @@ pub struct LedgerEntry {
     /// User who reported completion (user_id as string)
     #[serde(default)]
     pub reported_by: Option<String>,
+    /// Type of adjustment (for Adjusted entries only)
+    #[serde(default)]
+    pub adjustment_type: Option<AdjustmentType>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -60,6 +63,16 @@ pub enum EntryType {
     Penalty,
 }
 
+/// Categories for balance adjustments
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AdjustmentType {
+    Purchase,      // Kid bought something
+    CashWithdrawal, // Kid got cash
+    Bonus,         // Bonus money (birthday, allowance, etc.)
+    Correction,    // Fixing an error
+    Other,         // Miscellaneous
+}
+
 impl LedgerEntry {
     pub fn new(kid_id: Uuid, amount: Decimal, entry_type: EntryType, description: String) -> Self {
         Self {
@@ -71,6 +84,7 @@ impl LedgerEntry {
             status: TransactionStatus::Confirmed,
             task_id: None,
             reported_by: None,
+            adjustment_type: None,
             created_at: Utc::now(),
         }
     }
@@ -93,6 +107,7 @@ impl LedgerEntry {
             status,
             task_id,
             reported_by,
+            adjustment_type: None,
             created_at: Utc::now(),
         }
     }
@@ -103,6 +118,13 @@ impl LedgerEntry {
 
     pub fn adjusted(kid_id: Uuid, amount: Decimal, description: String) -> Self {
         Self::new(kid_id, amount, EntryType::Adjusted, description)
+    }
+
+    /// Create an adjusted entry with a specific adjustment type
+    pub fn adjusted_with_type(kid_id: Uuid, amount: Decimal, description: String, adjustment_type: AdjustmentType) -> Self {
+        let mut entry = Self::new(kid_id, amount, EntryType::Adjusted, description);
+        entry.adjustment_type = Some(adjustment_type);
+        entry
     }
 
     /// Create a penalty entry (amount should be negative)
