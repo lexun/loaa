@@ -547,6 +547,7 @@ fn DashboardContent() -> impl IntoView {
                                             let entry_type = match entry.entry_type {
                                                 EntryTypeDto::Earned => "Earned",
                                                 EntryTypeDto::Adjusted => "Adjusted",
+                                                EntryTypeDto::Penalty => "Penalty",
                                             };
                                             let is_pending = entry.status == TransactionStatusDto::Pending;
                                             let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
@@ -763,6 +764,7 @@ fn KidSummaryCard(summary: KidSummaryDto) -> impl IntoView {
                 let entry_type = match entry.entry_type {
                     EntryTypeDto::Earned => "Earned",
                     EntryTypeDto::Adjusted => "Adjusted",
+                    EntryTypeDto::Penalty => "Penalty",
                 };
                 let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                 view! {
@@ -886,6 +888,7 @@ pub fn LedgerPage() -> impl IntoView {
                                                                         let entry_type = match entry.entry_type {
                                                                             EntryTypeDto::Earned => "Earned",
                                                                             EntryTypeDto::Adjusted => "Adjusted",
+                                                                            EntryTypeDto::Penalty => "Penalty",
                                                                         };
                                                                         let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                                                                         let date_str = entry.created_at.format("%Y-%m-%d").to_string();

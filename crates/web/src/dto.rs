@@ -63,6 +63,7 @@ pub struct LedgerEntryDto {
 pub enum EntryTypeDto {
     Earned,
     Adjusted,
+    Penalty,
 }
 
 // Ledger DTO
@@ -199,6 +200,7 @@ pub mod convert {
             match et {
                 EntryType::Earned => EntryTypeDto::Earned,
                 EntryType::Adjusted => EntryTypeDto::Adjusted,
+                EntryType::Penalty => EntryTypeDto::Penalty,
             }
         }
     }

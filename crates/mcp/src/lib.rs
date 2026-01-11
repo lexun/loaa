@@ -6,10 +6,10 @@
 pub mod auth;
 
 use anyhow::Result;
-use loaa_core::db::{init_database_with_config, Database, KidRepository, LedgerRepository, TaskRepository, UserRepository};
+use loaa_core::db::{init_database_with_config, Database, KidRepository, LedgerRepository, TaskRepository, PenaltyRepository, UserRepository};
 use loaa_core::config::DatabaseConfig;
 use loaa_core::events::{DataEvent, EventSender, broadcast_event};
-use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Task};
+use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Penalty, Task};
 use loaa_core::workflows::TaskCompletionWorkflow;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -31,6 +31,7 @@ use crate::auth::AuthenticatedUser;
 #[derive(Clone)]
 pub struct LoaaServer {
     task_repo: Arc<RwLock<TaskRepository>>,
+    penalty_repo: Arc<RwLock<PenaltyRepository>>,
     kid_repo: Arc<RwLock<KidRepository>>,
     ledger_repo: Arc<RwLock<LedgerRepository>>,
     user_repo: Arc<RwLock<UserRepository>>,
@@ -120,6 +121,45 @@ struct AdjustBalanceParams {
     description: String,
 }
 
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct CreatePenaltyParams {
+    #[schemars(description = "Name of the penalty (e.g., 'Uncharitable arguing')")]
+    name: String,
+    #[schemars(description = "Description of the penalty")]
+    description: String,
+    #[schemars(description = "Value as decimal string (e.g., '0.10')")]
+    value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct UpdatePenaltyParams {
+    #[schemars(description = "ID of the penalty to update")]
+    id: String,
+    #[schemars(description = "New name for the penalty (optional)")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[schemars(description = "New description for the penalty (optional)")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    #[schemars(description = "New value as decimal string (optional)")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct DeletePenaltyParams {
+    #[schemars(description = "ID of the penalty to delete")]
+    id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct ApplyPenaltyParams {
+    #[schemars(description = "ID of the penalty to apply")]
+    penalty_id: String,
+    #[schemars(description = "ID of the kid to apply the penalty to")]
+    kid_id: String,
+}
+
 #[tool_router]
 impl LoaaServer {
     pub async fn new(db_config: &DatabaseConfig, owner_id: String) -> Result<Self> {
@@ -140,6 +180,7 @@ impl LoaaServer {
         owner_id: String,
     ) -> Result<Self> {
         let task_repo = TaskRepository::new(database.client.clone());
+        let penalty_repo = PenaltyRepository::new(database.client.clone());
         let kid_repo = KidRepository::new(database.client.clone());
         let ledger_repo = LedgerRepository::new(database.client.clone());
         let user_repo = UserRepository::new(database.client.clone());
@@ -152,6 +193,7 @@ impl LoaaServer {
 
         Ok(Self {
             task_repo: Arc::new(RwLock::new(task_repo)),
+            penalty_repo: Arc::new(RwLock::new(penalty_repo)),
             kid_repo: Arc::new(RwLock::new(kid_repo)),
             ledger_repo: Arc::new(RwLock::new(ledger_repo)),
             user_repo: Arc::new(RwLock::new(user_repo)),
@@ -534,7 +576,8 @@ impl LoaaServer {
                 "amount": entry.amount.to_string(),
                 "entry_type": match entry.entry_type {
                     EntryType::Earned => "earned",
-                    EntryType::Adjusted => "adjusted"
+                    EntryType::Adjusted => "adjusted",
+                    EntryType::Penalty => "penalty"
                 },
                 "description": entry.description,
                 "created_at": entry.created_at.to_rfc3339()
@@ -568,7 +611,8 @@ impl LoaaServer {
                 "amount": e.amount.to_string(),
                 "entry_type": match e.entry_type {
                     EntryType::Earned => "earned",
-                    EntryType::Adjusted => "adjusted"
+                    EntryType::Adjusted => "adjusted",
+                    EntryType::Penalty => "penalty"
                 },
                 "description": e.description,
                 "created_at": e.created_at.to_rfc3339()
@@ -613,6 +657,180 @@ impl LoaaServer {
                 "kid_id": created.kid_id.to_string(),
                 "amount": created.amount.to_string(),
                 "entry_type": "adjusted",
+                "description": created.description,
+                "created_at": created.created_at.to_rfc3339()
+            }
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap(),
+        )]))
+    }
+
+    #[tool(description = "Create a new penalty. Value should be a decimal string (e.g., '0.10').")]
+    async fn create_penalty(
+        &self,
+        extensions: Extensions,
+        Parameters(params): Parameters<CreatePenaltyParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let owner_id = self.get_owner_id(&extensions);
+        let account_id = self.get_account_id(&extensions).await?;
+        let value_dec = Decimal::from_str(&params.value).map_err(|e| {
+            McpError::invalid_request(format!("Invalid value format: {}", e), None)
+        })?;
+
+        let penalty = Penalty::new(params.name, params.description, value_dec, account_id, owner_id)
+            .map_err(|e| {
+                McpError::invalid_request(e.to_string(), None)
+            })?;
+
+        let penalty_repo = self.penalty_repo.read().await;
+        let created = penalty_repo.create(penalty).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
+        })?;
+
+        let response = json!({
+            "id": created.id.to_string(),
+            "name": created.name,
+            "description": created.description,
+            "value": created.value.to_string(),
+            "created_at": created.created_at.to_rfc3339()
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap(),
+        )]))
+    }
+
+    #[tool(description = "List all penalties owned by the current user.")]
+    async fn list_penalties(&self, extensions: Extensions) -> Result<CallToolResult, McpError> {
+        let account_id = self.get_account_id(&extensions).await?;
+        let penalty_repo = self.penalty_repo.read().await;
+        let penalties = penalty_repo.list_by_account(account_id).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
+        })?;
+
+        let response = json!({
+            "penalties": penalties.iter().map(|p| json!({
+                "id": p.id.to_string(),
+                "name": p.name,
+                "description": p.description,
+                "value": p.value.to_string(),
+                "created_at": p.created_at.to_rfc3339()
+            })).collect::<Vec<_>>()
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap(),
+        )]))
+    }
+
+    #[tool(description = "Update an existing penalty. All fields except id are optional.")]
+    async fn update_penalty(
+        &self,
+        Parameters(params): Parameters<UpdatePenaltyParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let penalty_id = Uuid::parse_str(&params.id).map_err(|e| {
+            McpError::invalid_request(format!("Invalid penalty ID: {}", e), None)
+        })?;
+
+        let penalty_repo = self.penalty_repo.read().await;
+        let mut penalty = penalty_repo.get(penalty_id).await.map_err(|e| {
+            McpError::resource_not_found(format!("Penalty not found: {}", e), None)
+        })?;
+
+        if let Some(n) = params.name {
+            penalty.name = n;
+        }
+        if let Some(d) = params.description {
+            penalty.description = d;
+        }
+        if let Some(v) = params.value {
+            penalty.value = Decimal::from_str(&v).map_err(|e| {
+                McpError::invalid_request(format!("Invalid value format: {}", e), None)
+            })?;
+        }
+
+        let updated = penalty_repo.update(penalty).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
+        })?;
+
+        let response = json!({
+            "id": updated.id.to_string(),
+            "name": updated.name,
+            "description": updated.description,
+            "value": updated.value.to_string()
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap(),
+        )]))
+    }
+
+    #[tool(description = "Delete a penalty by ID.")]
+    async fn delete_penalty(
+        &self,
+        Parameters(params): Parameters<DeletePenaltyParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let penalty_id = Uuid::parse_str(&params.id).map_err(|e| {
+            McpError::invalid_request(format!("Invalid penalty ID: {}", e), None)
+        })?;
+
+        let penalty_repo = self.penalty_repo.read().await;
+        penalty_repo.delete(penalty_id).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
+        })?;
+
+        let response = json!({
+            "success": true,
+            "message": format!("Penalty {} deleted successfully", penalty_id)
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap(),
+        )]))
+    }
+
+    #[tool(description = "Apply a penalty to a kid. This deducts the penalty value from the kid's balance.")]
+    async fn apply_penalty(
+        &self,
+        Parameters(params): Parameters<ApplyPenaltyParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let penalty_id = Uuid::parse_str(&params.penalty_id).map_err(|e| {
+            McpError::invalid_request(format!("Invalid penalty ID: {}", e), None)
+        })?;
+        let kid_id = Uuid::parse_str(&params.kid_id).map_err(|e| {
+            McpError::invalid_request(format!("Invalid kid ID: {}", e), None)
+        })?;
+
+        // Get the penalty to get its value and name
+        let penalty_repo = self.penalty_repo.read().await;
+        let penalty = penalty_repo.get(penalty_id).await.map_err(|e| {
+            McpError::resource_not_found(format!("Penalty not found: {}", e), None)
+        })?;
+
+        // Create a penalty ledger entry (negative amount)
+        let description = format!("Penalty: {}", penalty.name);
+        let entry = LedgerEntry::penalty(kid_id, penalty.value, description.clone());
+        let ledger_repo = self.ledger_repo.read().await;
+        let created = ledger_repo.create_entry(entry).await.map_err(|e| {
+            McpError::internal_error("database_error", Some(json!({"error": e.to_string()})))
+        })?;
+
+        // Emit event for SSE clients
+        self.emit_event(DataEvent::BalanceAdjusted {
+            kid_id: kid_id.to_string(),
+            amount: format!("-{}", penalty.value),
+            description,
+        });
+
+        let response = json!({
+            "success": true,
+            "ledger_entry": {
+                "id": created.id.to_string(),
+                "kid_id": created.kid_id.to_string(),
+                "amount": created.amount.to_string(),
+                "entry_type": "penalty",
                 "description": created.description,
                 "created_at": created.created_at.to_rfc3339()
             }

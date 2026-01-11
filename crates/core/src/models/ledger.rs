@@ -57,6 +57,7 @@ where
 pub enum EntryType {
     Earned,
     Adjusted,
+    Penalty,
 }
 
 impl LedgerEntry {
@@ -102,6 +103,13 @@ impl LedgerEntry {
 
     pub fn adjusted(kid_id: Uuid, amount: Decimal, description: String) -> Self {
         Self::new(kid_id, amount, EntryType::Adjusted, description)
+    }
+
+    /// Create a penalty entry (amount should be negative)
+    pub fn penalty(kid_id: Uuid, amount: Decimal, description: String) -> Self {
+        // Ensure amount is negative for penalties
+        let negative_amount = if amount > Decimal::ZERO { -amount } else { amount };
+        Self::new(kid_id, negative_amount, EntryType::Penalty, description)
     }
 
     /// Check if this entry is pending approval
