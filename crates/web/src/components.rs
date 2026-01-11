@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_router::*;
 use crate::server_functions::*;
 use crate::dto::*;
 
@@ -92,85 +93,98 @@ fn markdown_to_html(text: &str) -> String {
     result
 }
 
-#[derive(Debug, Clone)]
-pub enum View {
-    Login,
-    Admin,
-    Dashboard,
-    Ledger(UuidDto),
-}
-
+/// Login page component
 #[component]
-pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
+pub fn LoginPage() -> impl IntoView {
+    let navigate = use_navigate();
     let (username, set_username) = create_signal(String::new());
     let (password, set_password) = create_signal(String::new());
     let (error, set_error) = create_signal(Option::<String>::None);
     let (logging_in, set_logging_in) = create_signal(false);
     let (oauth_completing, set_oauth_completing) = create_signal(false);
 
-    let on_submit = move |ev: leptos::ev::SubmitEvent| {
-        ev.prevent_default();
-        set_error.set(None);
-        set_logging_in.set(true);
-
-        let username_val = username.get();
-        let password_val = password.get();
-
-        spawn_local(async move {
-            match login(username_val, password_val).await {
-                Ok(true) => {
-                    // Check if there's a pending OAuth flow
-                    match check_pending_oauth().await {
-                        Ok(Some(oauth_url)) => {
-                            // Redirect to OAuth authorization endpoint
-                            leptos::logging::log!("Redirecting to OAuth: {}", oauth_url);
-                            // Update UI to show OAuth is completing (not stuck on "logging in")
-                            set_logging_in.set(false);
-                            set_oauth_completing.set(true);
-                            let window = leptos::window();
-                            if let Ok(location) = window.location().href() {
-                                leptos::logging::log!("Current location: {}", location);
-                            }
-                            let _ = window.location().set_href(&oauth_url);
+    // Check if already authenticated on mount
+    create_effect({
+        let navigate = navigate.clone();
+        move |_| {
+            let navigate = navigate.clone();
+            spawn_local(async move {
+                if let Ok(true) = check_auth().await {
+                    // Already authenticated, redirect based on account type
+                    match get_account_type().await {
+                        Ok(AccountTypeDto::Admin) => {
+                            navigate("/admin", Default::default());
                         }
-                        Ok(None) => {
-                            leptos::logging::log!("No pending OAuth, checking account type");
-                            // No pending OAuth, check account type to determine view
-                            match get_account_type().await {
-                                Ok(AccountTypeDto::Admin) => {
-                                    leptos::logging::log!("Admin user, going to admin view");
-                                    set_view.set(View::Admin);
-                                }
-                                _ => {
-                                    leptos::logging::log!("Regular user, going to dashboard");
-                                    set_view.set(View::Dashboard);
+                        _ => {
+                            navigate("/dashboard", Default::default());
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    let on_submit = {
+        let navigate = navigate.clone();
+        move |ev: leptos::ev::SubmitEvent| {
+            ev.prevent_default();
+            set_error.set(None);
+            set_logging_in.set(true);
+
+            let username_val = username.get();
+            let password_val = password.get();
+            let navigate = navigate.clone();
+
+            spawn_local(async move {
+                match login(username_val, password_val).await {
+                    Ok(true) => {
+                        // Check if there's a pending OAuth flow
+                        match check_pending_oauth().await {
+                            Ok(Some(oauth_url)) => {
+                                // Redirect to OAuth authorization endpoint
+                                leptos::logging::log!("Redirecting to OAuth: {}", oauth_url);
+                                set_logging_in.set(false);
+                                set_oauth_completing.set(true);
+                                let window = leptos::window();
+                                let _ = window.location().set_href(&oauth_url);
+                            }
+                            Ok(None) => {
+                                leptos::logging::log!("No pending OAuth, checking account type");
+                                match get_account_type().await {
+                                    Ok(AccountTypeDto::Admin) => {
+                                        leptos::logging::log!("Admin user, going to admin");
+                                        navigate("/admin", Default::default());
+                                    }
+                                    _ => {
+                                        leptos::logging::log!("Regular user, going to dashboard");
+                                        navigate("/dashboard", Default::default());
+                                    }
                                 }
                             }
-                        }
-                        Err(e) => {
-                            leptos::logging::log!("Error checking OAuth: {}", e);
-                            // Error checking OAuth, check account type
-                            match get_account_type().await {
-                                Ok(AccountTypeDto::Admin) => {
-                                    set_view.set(View::Admin);
-                                }
-                                _ => {
-                                    set_view.set(View::Dashboard);
+                            Err(e) => {
+                                leptos::logging::log!("Error checking OAuth: {}", e);
+                                match get_account_type().await {
+                                    Ok(AccountTypeDto::Admin) => {
+                                        navigate("/admin", Default::default());
+                                    }
+                                    _ => {
+                                        navigate("/dashboard", Default::default());
+                                    }
                                 }
                             }
                         }
                     }
+                    Ok(false) => {
+                        set_error.set(Some("Invalid username or password".to_string()));
+                        set_logging_in.set(false);
+                    }
+                    Err(e) => {
+                        set_error.set(Some(format!("Login error: {}", e)));
+                        set_logging_in.set(false);
+                    }
                 }
-                Ok(false) => {
-                    set_error.set(Some("Invalid username or password".to_string()));
-                    set_logging_in.set(false);
-                }
-                Err(e) => {
-                    set_error.set(Some(format!("Login error: {}", e)));
-                    set_logging_in.set(false);
-                }
-            }
-        });
+            });
+        }
     };
 
     view! {
@@ -179,16 +193,10 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
                 <h1>"Loa'a"</h1>
                 <p class="subtitle">"Chore and rewards tracking system"</p>
 
-                {move || if oauth_completing.get() {
-                    view! {
-                        <div class="oauth-completing">
-                            <p class="oauth-message">"Completing authorization..."</p>
-                            <p class="oauth-hint">"You can close this window and return to Claude."</p>
-                        </div>
-                    }.into_view()
-                } else {
-                    view! {
-                        <form on:submit=on_submit>
+                <Show
+                    when=move || oauth_completing.get()
+                    fallback=move || view! {
+                        <form on:submit=on_submit.clone()>
                             <div class="form-group">
                                 <label for="username">"Username"</label>
                                 <input
@@ -227,111 +235,78 @@ pub fn Login(set_view: WriteSignal<View>) -> impl IntoView {
                                 {move || if logging_in.get() { "Logging in..." } else { "Log In" }}
                             </button>
                         </form>
-                    }.into_view()
-                }}
+                    }
+                >
+                    <div class="oauth-completing">
+                        <p class="oauth-message">"Completing authorization..."</p>
+                        <p class="oauth-hint">"You can close this window and return to Claude."</p>
+                    </div>
+                </Show>
             </div>
         </div>
     }
 }
 
+/// Dashboard page - main view for parents
 #[component]
-pub fn Dashboard() -> impl IntoView {
-    let (current_view, set_current_view) = create_signal(View::Login);
+pub fn DashboardPage() -> impl IntoView {
+    let navigate = use_navigate();
 
-    // Check if user is authenticated on mount
-    create_effect(move |_| {
-        spawn_local(async move {
-            match check_auth().await {
-                Ok(true) => {
-                    // User is authenticated, check account type
-                    match get_account_type().await {
-                        Ok(AccountTypeDto::Admin) => {
-                            set_current_view.set(View::Admin);
+    // Check authentication on mount
+    create_effect({
+        let navigate = navigate.clone();
+        move |_| {
+            let navigate = navigate.clone();
+            spawn_local(async move {
+                match check_auth().await {
+                    Ok(true) => {
+                        // Authenticated - check if should redirect to admin
+                        if let Ok(AccountTypeDto::Admin) = get_account_type().await {
+                            navigate("/admin", Default::default());
                         }
-                        _ => {
-                            set_current_view.set(View::Dashboard);
-                        }
+                        // Otherwise stay on dashboard
+                    }
+                    _ => {
+                        // Not authenticated, redirect to login
+                        navigate("/login", Default::default());
                     }
                 }
-                Ok(false) => {
-                    // Not authenticated, show login
-                    set_current_view.set(View::Login);
-                }
-                Err(_) => {
-                    // Error checking auth, default to login
-                    set_current_view.set(View::Login);
-                }
-            }
-        });
+            });
+        }
     });
 
-    let handle_logout = move |_| {
-        spawn_local(async move {
-            let _ = logout().await;
-            set_current_view.set(View::Login);
-        });
+    let handle_logout = {
+        let navigate = navigate.clone();
+        move |_| {
+            let navigate = navigate.clone();
+            spawn_local(async move {
+                let _ = logout().await;
+                navigate("/login", Default::default());
+            });
+        }
     };
 
     view! {
         <div class="app-wrapper">
-            {move || match current_view.get() {
-                View::Login => view! {
-                    <Login set_view=set_current_view />
-                }.into_view(),
-                View::Admin => view! {
-                    <div>
-                        <nav class="navbar">
-                            <div class="navbar-brand">"Loa'a Admin"</div>
-                            <button class="logout-btn" on:click=handle_logout>
-                                "Log Out"
-                            </button>
-                        </nav>
-                        <div class="container">
-                            <main>
-                                <AdminPanel />
-                            </main>
-                        </div>
-                    </div>
-                }.into_view(),
-                View::Dashboard => view! {
-                    <div>
-                        <nav class="navbar">
-                            <div class="navbar-brand">"Loa'a"</div>
-                            <button class="logout-btn" on:click=handle_logout>
-                                "Log Out"
-                            </button>
-                        </nav>
-                        <div class="container">
-                            <main>
-                                <DashboardView set_view=set_current_view />
-                            </main>
-                        </div>
-                        // Chat widget at root level for proper fixed positioning
-                        <ChatWidget />
-                    </div>
-                }.into_view(),
-                View::Ledger(kid_id) => view! {
-                    <div>
-                        <nav class="navbar">
-                            <div class="navbar-brand">"Loa'a"</div>
-                            <button class="logout-btn" on:click=handle_logout>
-                                "Log Out"
-                            </button>
-                        </nav>
-                        <div class="container">
-                            <main>
-                                <LedgerView kid_id=kid_id set_view=set_current_view />
-                            </main>
-                        </div>
-                    </div>
-                }.into_view(),
-            }}
+            <nav class="navbar">
+                <div class="navbar-brand">"Loa'a"</div>
+                <button class="logout-btn" on:click=handle_logout>
+                    "Log Out"
+                </button>
+            </nav>
+            <div class="container">
+                <main>
+                    <DashboardContent />
+                </main>
+            </div>
+            <ChatWidget />
         </div>
     }
 }
 
+/// Dashboard content - the actual dashboard UI
 #[component]
-fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
+fn DashboardContent() -> impl IntoView {
     // Initial data load
     let dashboard_data = create_resource(|| (), |_| get_dashboard_data());
 
@@ -445,7 +420,7 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
                     <h2>"Kids"</h2>
                     <div class="kids-grid">
                         {move || kid_summaries.get().into_iter().map(|summary| {
-                            view! { <KidSummaryCard summary=summary set_view=set_view /> }
+                            view! { <KidSummaryCard summary=summary /> }
                         }).collect::<Vec<_>>()}
                     </div>
                 </section>
@@ -775,8 +750,9 @@ fn DashboardView(set_view: WriteSignal<View>) -> impl IntoView {
 }
 
 #[component]
-fn KidSummaryCard(summary: KidSummaryDto, set_view: WriteSignal<View>) -> impl IntoView {
+fn KidSummaryCard(summary: KidSummaryDto) -> impl IntoView {
     let kid_id = summary.kid.id.clone();
+    let ledger_url = format!("/kids/{}/ledger", kid_id);
     view! {
         <div class="kid-card">
             <div class="kid-header">
@@ -797,12 +773,9 @@ fn KidSummaryCard(summary: KidSummaryDto, set_view: WriteSignal<View>) -> impl I
                     </div>
                 }
             })}
-            <button
-                class="view-ledger-btn"
-                on:click=move |_| set_view.set(View::Ledger(kid_id.clone()))
-            >
+            <A href=ledger_url class="view-ledger-btn">
                 "View Ledger"
-            </button>
+            </A>
         </div>
     }
 }
@@ -823,102 +796,143 @@ fn format_time_ago(dt: chrono::DateTime<chrono::Utc>) -> String {
     }
 }
 
+/// Ledger page - shows transaction history for a kid
 #[component]
-pub fn LedgerView(kid_id: UuidDto, set_view: WriteSignal<View>) -> impl IntoView {
-    let ledger = create_resource(move || kid_id.clone(), get_ledger);
+pub fn LedgerPage() -> impl IntoView {
+    let params = use_params_map();
+    let navigate = use_navigate();
+
+    // Check authentication
+    create_effect({
+        let navigate = navigate.clone();
+        move |_| {
+            let navigate = navigate.clone();
+            spawn_local(async move {
+                if let Ok(false) | Err(_) = check_auth().await {
+                    navigate("/login", Default::default());
+                }
+            });
+        }
+    });
+
+    // Get kid_id from URL params
+    let kid_id = move || {
+        params.with(|p| p.get("id").cloned().unwrap_or_default())
+    };
+
+    let ledger = create_resource(kid_id, |id| async move {
+        get_ledger(id).await
+    });
+
+    let handle_logout = {
+        let navigate = navigate.clone();
+        move |_| {
+            let navigate = navigate.clone();
+            spawn_local(async move {
+                let _ = logout().await;
+                navigate("/login", Default::default());
+            });
+        }
+    };
 
     view! {
-        <div class="ledger-view">
-            <Suspense fallback=move || view! { <p>"Loading ledger..."</p> }>
-                {move || {
-                    ledger.get().map(|result| match result {
-                        Ok(ledger_data) => {
-                            view! {
-                                <div>
-                                    <div class="ledger-header">
-                                        <button
-                                            class="back-btn"
-                                            on:click=move |_| set_view.set(View::Dashboard)
-                                        >
-                                            "← Back to Dashboard"
-                                        </button>
-                                        <h2>"Ledger"</h2>
-                                        <div class="balance-display">
-                                            <span class="balance-label">"Current Balance:"</span>
-                                            <span class="balance-value">"$"{ledger_data.balance.to_string()}</span>
+        <div class="app-wrapper">
+            <nav class="navbar">
+                <div class="navbar-brand">"Loa'a"</div>
+                <button class="logout-btn" on:click=handle_logout>
+                    "Log Out"
+                </button>
+            </nav>
+            <div class="container">
+                <main>
+                    <div class="ledger-view">
+                        <Suspense fallback=move || view! { <p>"Loading ledger..."</p> }>
+                            {move || {
+                                ledger.get().map(|result| match result {
+                                    Ok(ledger_data) => {
+                                        view! {
+                                            <div>
+                                                <div class="ledger-header">
+                                                    <A href="/dashboard" class="back-btn">
+                                                        "← Back to Dashboard"
+                                                    </A>
+                                                    <h2>"Ledger"</h2>
+                                                    <div class="balance-display">
+                                                        <span class="balance-label">"Current Balance:"</span>
+                                                        <span class="balance-value">"$"{ledger_data.balance.to_string()}</span>
+                                                    </div>
+                                                </div>
+
+                                                <section class="transactions">
+                                                    <h3>"All Transactions"</h3>
+                                                    {if ledger_data.entries.is_empty() {
+                                                        view! { <p>"No transactions yet."</p> }.into_view()
+                                                    } else {
+                                                        let mut running_balance = rust_decimal::Decimal::ZERO;
+                                                        view! {
+                                                            <table class="ledger-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>"Date"</th>
+                                                                        <th>"Type"</th>
+                                                                        <th>"Description"</th>
+                                                                        <th>"Amount"</th>
+                                                                        <th>"Balance"</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {ledger_data.entries.into_iter().map(|entry| {
+                                                                        running_balance += entry.amount;
+                                                                        let entry_type = match entry.entry_type {
+                                                                            EntryTypeDto::Earned => "Earned",
+                                                                            EntryTypeDto::Adjusted => "Adjusted",
+                                                                        };
+                                                                        let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
+                                                                        let date_str = entry.created_at.format("%Y-%m-%d").to_string();
+                                                                        let time_str = entry.created_at.format("%H:%M").to_string();
+                                                                        let balance_at_time = running_balance;
+
+                                                                        view! {
+                                                                            <tr class="ledger-row">
+                                                                                <td class="date-cell">
+                                                                                    <div class="date">{date_str}</div>
+                                                                                    <div class="time">{time_str}</div>
+                                                                                </td>
+                                                                                <td class="type-cell">
+                                                                                    <span class={format!("badge badge-{}", entry_type.to_lowercase())}>
+                                                                                        {entry_type}
+                                                                                    </span>
+                                                                                </td>
+                                                                                <td class="description-cell">{entry.description}</td>
+                                                                                <td class={format!("amount-cell {}", if entry.amount >= rust_decimal::Decimal::ZERO { "positive" } else { "negative" })}>
+                                                                                    {sign}{"$"}{entry.amount.abs().to_string()}
+                                                                                </td>
+                                                                                <td class="balance-cell">"$"{balance_at_time.to_string()}</td>
+                                                                            </tr>
+                                                                        }
+                                                                    }).collect::<Vec<_>>()}
+                                                                </tbody>
+                                                            </table>
+                                                        }.into_view()
+                                                    }}
+                                                </section>
+                                            </div>
+                                        }.into_view()
+                                    }
+                                    Err(e) => view! {
+                                        <div>
+                                            <A href="/dashboard" class="back-btn">
+                                                "← Back to Dashboard"
+                                            </A>
+                                            <p class="error">"Error loading ledger: " {e.to_string()}</p>
                                         </div>
-                                    </div>
-
-                                    <section class="transactions">
-                                        <h3>"All Transactions"</h3>
-                                        {if ledger_data.entries.is_empty() {
-                                            view! { <p>"No transactions yet."</p> }.into_view()
-                                        } else {
-                                            let mut running_balance = rust_decimal::Decimal::ZERO;
-                                            view! {
-                                                <table class="ledger-table">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>"Date"</th>
-                                                            <th>"Type"</th>
-                                                            <th>"Description"</th>
-                                                            <th>"Amount"</th>
-                                                            <th>"Balance"</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {ledger_data.entries.into_iter().map(|entry| {
-                                                            running_balance += entry.amount;
-                                                            let entry_type = match entry.entry_type {
-                                                                EntryTypeDto::Earned => "Earned",
-                                                                EntryTypeDto::Adjusted => "Adjusted",
-                                                            };
-                                                            let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
-                                                            let date_str = entry.created_at.format("%Y-%m-%d").to_string();
-                                                            let time_str = entry.created_at.format("%H:%M").to_string();
-                                                            let balance_at_time = running_balance;
-
-                                                            view! {
-                                                                <tr class="ledger-row">
-                                                                    <td class="date-cell">
-                                                                        <div class="date">{date_str}</div>
-                                                                        <div class="time">{time_str}</div>
-                                                                    </td>
-                                                                    <td class="type-cell">
-                                                                        <span class={format!("badge badge-{}", entry_type.to_lowercase())}>
-                                                                            {entry_type}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td class="description-cell">{entry.description}</td>
-                                                                    <td class={format!("amount-cell {}", if entry.amount >= rust_decimal::Decimal::ZERO { "positive" } else { "negative" })}>
-                                                                        {sign}{"$"}{entry.amount.abs().to_string()}
-                                                                    </td>
-                                                                    <td class="balance-cell">"$"{balance_at_time.to_string()}</td>
-                                                                </tr>
-                                                            }
-                                                        }).collect::<Vec<_>>()}
-                                                    </tbody>
-                                                </table>
-                                            }.into_view()
-                                        }}
-                                    </section>
-                                </div>
-                            }.into_view()
-                        }
-                        Err(e) => view! {
-                            <div>
-                                <button
-                                    class="back-btn"
-                                    on:click=move |_| set_view.set(View::Dashboard)
-                                >
-                                    "← Back to Dashboard"
-                                </button>
-                                <p class="error">"Error loading ledger: " {e.to_string()}</p>
-                            </div>
-                        }.into_view(),
-                    })
-                }}
-            </Suspense>
+                                    }.into_view(),
+                                })
+                            }}
+                        </Suspense>
+                    </div>
+                </main>
+            </div>
         </div>
     }
 }
@@ -1066,8 +1080,66 @@ fn ChatWidget() -> impl IntoView {
     }
 }
 
+/// Admin page - for system administrators
 #[component]
-fn AdminPanel() -> impl IntoView {
+pub fn AdminPage() -> impl IntoView {
+    let navigate = use_navigate();
+
+    // Check authentication and admin status
+    create_effect({
+        let navigate = navigate.clone();
+        move |_| {
+            let navigate = navigate.clone();
+            spawn_local(async move {
+                match check_auth().await {
+                    Ok(true) => {
+                        // Check if admin
+                        if let Ok(account_type) = get_account_type().await {
+                            if account_type != AccountTypeDto::Admin {
+                                // Not admin, redirect to dashboard
+                                navigate("/dashboard", Default::default());
+                            }
+                        }
+                    }
+                    _ => {
+                        navigate("/login", Default::default());
+                    }
+                }
+            });
+        }
+    });
+
+    let handle_logout = {
+        let navigate = navigate.clone();
+        move |_| {
+            let navigate = navigate.clone();
+            spawn_local(async move {
+                let _ = logout().await;
+                navigate("/login", Default::default());
+            });
+        }
+    };
+
+    view! {
+        <div class="app-wrapper">
+            <nav class="navbar">
+                <div class="navbar-brand">"Loa'a Admin"</div>
+                <button class="logout-btn" on:click=handle_logout>
+                    "Log Out"
+                </button>
+            </nav>
+            <div class="container">
+                <main>
+                    <AdminContent />
+                </main>
+            </div>
+        </div>
+    }
+}
+
+/// Admin panel content
+#[component]
+fn AdminContent() -> impl IntoView {
     let (accounts, set_accounts) = create_signal(Vec::<AccountDto>::new());
     let (is_loaded, set_is_loaded) = create_signal(false);
     let (error, set_error) = create_signal(Option::<String>::None);

@@ -1,6 +1,7 @@
 use leptos::*;
 use leptos_meta::*;
-use crate::components::Dashboard;
+use leptos_router::*;
+use crate::components::{LoginPage, DashboardPage, LedgerPage, AdminPage};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -11,7 +12,17 @@ pub fn App() -> impl IntoView {
         <Link rel="stylesheet" href="/style/main.css"/>
         <Title text="Loa'a - Chore Tracker"/>
 
-        <Dashboard />
+        <Router>
+            <main>
+                <Routes>
+                    <Route path="/" view=LoginPage />
+                    <Route path="/login" view=LoginPage />
+                    <Route path="/dashboard" view=DashboardPage />
+                    <Route path="/kids/:id/ledger" view=LedgerPage />
+                    <Route path="/admin" view=AdminPage />
+                </Routes>
+            </main>
+        </Router>
     }
 }
 
