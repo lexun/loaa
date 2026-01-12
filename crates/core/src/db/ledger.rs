@@ -51,7 +51,7 @@ impl LedgerRepository {
 
     pub async fn get_ledger(&self, kid_id: Uuid) -> Result<Ledger> {
         let mut response = self.db
-            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) = string::lowercase($kid_id) ORDER BY created_at ASC")
+            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) = string::lowercase($kid_id) ORDER BY created_at DESC")
             .bind(("kid_id", kid_id.to_string()))
             .await?;
 
