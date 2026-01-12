@@ -195,7 +195,7 @@ pub async fn get_dashboard_data() -> Result<DashboardDataDto, ServerFnError> {
         let ledger = ledger_repo.get_ledger(kid.id).await
             .map_err(|e| ServerFnError::new(format!("Failed to get ledger: {}", e)))?;
 
-        let recent_entry = ledger.entries.last().cloned().map(Into::into);
+        let recent_entry = ledger.entries.first().cloned().map(Into::into);
 
         kid_summaries.push(KidSummaryDto {
             kid: kid.clone().into(),
