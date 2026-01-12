@@ -1205,13 +1205,39 @@ li {
 
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
+    body {
+        background: white !important;
+    }
+
+    .app-wrapper {
+        background: white !important;
+    }
+
     .container {
-        padding: 12px;
+        padding: 0 !important;
+        max-width: 100% !important;
+        margin: 0 !important;
     }
 
     main {
-        padding: 16px;
-        border-radius: 12px;
+        padding: 16px !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: white !important;
+        min-height: calc(100vh - 60px);
+        backdrop-filter: none !important;
+    }
+
+    .navbar {
+        border-radius: 0;
+    }
+
+    /* Ensure chat widget stays fixed on mobile */
+    .chat-widget {
+        position: fixed !important;
+        bottom: 20px !important;
+        right: 20px !important;
+        z-index: 9999 !important;
     }
 
     /* Activity list - stack vertically on mobile */
