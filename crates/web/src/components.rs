@@ -870,7 +870,8 @@ pub fn LedgerPage() -> impl IntoView {
                                                     {if ledger_data.entries.is_empty() {
                                                         view! { <p>"No transactions yet."</p> }.into_view()
                                                     } else {
-                                                        let mut running_balance = rust_decimal::Decimal::ZERO;
+                                                        // Start with current balance and work backwards (entries are newest-first)
+                                                        let mut running_balance = ledger_data.balance;
                                                         view! {
                                                             <table class="ledger-table">
                                                                 <thead>
@@ -884,7 +885,9 @@ pub fn LedgerPage() -> impl IntoView {
                                                                 </thead>
                                                                 <tbody>
                                                                     {ledger_data.entries.into_iter().map(|entry| {
-                                                                        running_balance += entry.amount;
+                                                                        // Show balance after this transaction, then subtract for next row
+                                                                        let balance_at_time = running_balance;
+                                                                        running_balance -= entry.amount;
                                                                         let entry_type = match entry.entry_type {
                                                                             EntryTypeDto::Earned => "Earned",
                                                                             EntryTypeDto::Adjusted => "Adjusted",
@@ -893,7 +896,6 @@ pub fn LedgerPage() -> impl IntoView {
                                                                         let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
                                                                         let date_str = entry.created_at.format("%Y-%m-%d").to_string();
                                                                         let time_str = entry.created_at.format("%H:%M").to_string();
-                                                                        let balance_at_time = running_balance;
 
                                                                         view! {
                                                                             <tr class="ledger-row">
