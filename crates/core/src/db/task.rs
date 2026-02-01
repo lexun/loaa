@@ -92,10 +92,10 @@ impl TaskRepository {
             .query("SELECT * FROM task WHERE
                 account_id = type::uuid($account_id) OR
                 (type::is::string(account_id) AND account_id = $account_id) OR
-                (account_id IS NOT NONE AND encoding::base64::encode(account_id) = $account_id_b64) OR
+                (type::is::bytes(account_id) AND encoding::base64::encode(account_id) = $account_id_b64) OR
                 account_id = type::uuid($nil_uuid) OR
                 (type::is::string(account_id) AND account_id = $nil_uuid) OR
-                (account_id IS NOT NONE AND encoding::base64::encode(account_id) = $nil_uuid_b64) OR
+                (type::is::bytes(account_id) AND encoding::base64::encode(account_id) = $nil_uuid_b64) OR
                 account_id IS NONE")
             .bind(("account_id", account_id_str))
             .bind(("account_id_b64", account_id_b64))
