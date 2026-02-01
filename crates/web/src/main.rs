@@ -20,6 +20,7 @@ async fn main() {
     };
     use loaa_web::sse::sse_handler;
     use loaa_web::claude::chat_handler;
+    use loaa_web::api::get_dashboard_data_handler;
     use loaa_web::server_functions::{get_db, set_event_sender};
     use loaa_core::config::Config;
     use loaa_core::create_event_channel;
@@ -134,12 +135,19 @@ async fn main() {
         .route("/chat", post(chat_handler))
         .with_state(app_state.clone());
 
+    // Create API router with app state (bypasses Leptos server functions for reliability)
+    let api_router = Router::new()
+        .route("/dashboard", get(get_dashboard_data_handler))
+        .with_state(app_state.clone());
+
     // Serve static files BEFORE leptos routes so they take precedence
     let app = Router::new()
         // SSE endpoint for real-time updates (nested under /api)
         .nest("/api", sse_router)
         // Chat endpoint for embedded Claude chat
         .nest("/api", chat_router)
+        // REST API endpoints (bypass Leptos server functions for reliability)
+        .nest("/api", api_router)
         // OAuth discovery endpoints (with CORS)
         .route(
             "/.well-known/oauth-authorization-server",

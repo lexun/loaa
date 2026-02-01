@@ -4,6 +4,9 @@ pub mod server_functions;
 pub mod components;
 
 #[cfg(feature = "ssr")]
+pub mod api;
+
+#[cfg(feature = "ssr")]
 pub mod oauth;
 
 #[cfg(feature = "ssr")]

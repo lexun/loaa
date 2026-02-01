@@ -304,11 +304,57 @@ pub fn DashboardPage() -> impl IntoView {
     }
 }
 
+/// Fetch dashboard data from API (bypasses Leptos server function to avoid context panics)
+#[cfg(feature = "hydrate")]
+async fn fetch_dashboard_data() -> Result<DashboardDataDto, String> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    use web_sys::{Request, RequestInit, RequestMode, Response};
+
+    let window = web_sys::window().ok_or("No window")?;
+    let opts = RequestInit::new();
+    opts.set_method("GET");
+    opts.set_mode(RequestMode::SameOrigin);
+
+    let request = Request::new_with_str_and_init("/api/dashboard", &opts)
+        .map_err(|e| format!("Request error: {:?}", e))?;
+
+    request.headers()
+        .set("Accept", "application/json")
+        .map_err(|e| format!("Header error: {:?}", e))?;
+
+    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+
+    let resp: Response = resp_value.dyn_into()
+        .map_err(|_| "Response conversion error")?;
+
+    if !resp.ok() {
+        return Err(format!("HTTP {}: {}", resp.status(), resp.status_text()));
+    }
+
+    let json = JsFuture::from(resp.json().map_err(|e| format!("JSON error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("JSON parse error: {:?}", e))?;
+
+    let data: DashboardDataDto = serde_wasm_bindgen::from_value(json)
+        .map_err(|e| format!("Deserialize error: {}", e))?;
+
+    Ok(data)
+}
+
+/// SSR fallback - uses server function (may fail under load but needed for initial render)
+#[cfg(not(feature = "hydrate"))]
+async fn fetch_dashboard_data() -> Result<DashboardDataDto, String> {
+    get_dashboard_data().await.map_err(|e| e.to_string())
+}
+
 /// Dashboard content - the actual dashboard UI
 #[component]
 fn DashboardContent() -> impl IntoView {
-    // Initial data load
-    let dashboard_data = create_resource(|| (), |_| get_dashboard_data());
+    // Initial data load - uses API endpoint on client to avoid Leptos context panic
+    let dashboard_data = create_resource(|| (), |_| fetch_dashboard_data());
 
     // Fine-grained signals for each piece of data to avoid full DOM replacement
     let (kid_summaries, set_kid_summaries) = create_signal(Vec::<KidSummaryDto>::new());
@@ -379,7 +425,7 @@ fn DashboardContent() -> impl IntoView {
                 let onmessage = Closure::<dyn Fn(MessageEvent)>::new(move |_event: MessageEvent| {
                     // Fetch new data in background and update fine-grained signals
                     spawn_local(async move {
-                        if let Ok(data) = get_dashboard_data().await {
+                        if let Ok(data) = fetch_dashboard_data().await {
                             set_kid_summaries.set(data.kid_summaries);
                         }
                         if let Ok(task_list) = get_tasks().await {

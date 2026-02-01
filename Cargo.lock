@@ -2700,6 +2700,7 @@ dependencies = [
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "sha2",
  "tokio",
@@ -2711,6 +2712,8 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

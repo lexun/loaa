@@ -57,6 +57,18 @@ tower-http = { version = "0.5", features = ["fs", "trace", "cors"], optional = t
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+    "Window",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "Headers",
+    "EventSource",
+    "MessageEvent",
+] }
 console_error_panic_hook = { version = "0.1", optional = true }
 rust_decimal = { version = "1.33", features = ["serde-with-str"] }
 rust_decimal_macros = "1.33"
@@ -83,6 +95,9 @@ hydrate = [
     "leptos_meta/hydrate",
     "leptos_router/hydrate",
     "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:serde-wasm-bindgen",
+    "dep:web-sys",
     "dep:console_error_panic_hook",
 ]
 ssr = [
