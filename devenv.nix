@@ -16,6 +16,13 @@
     surrealdb
     lld
     opentofu
+    # Build dependencies for surrealdb-librocksdb-sys
+    pkg-config
+    openssl
+    llvmPackages.libclang
+    clang
+    # Leptos dev tools (installed via cargo in enterShell for version compatibility)
+    binaryen  # for wasm-opt
   ];
 
   # Environment variables for all processes
@@ -23,7 +30,14 @@
     # Database configuration - use embedded mode by default
     LOAA_DB_MODE = "embedded";
     LOAA_DB_PATH = "./data/loaa.db";  # Relative to project root
+    # Build dependencies for rocksdb/bindgen
+    LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
   };
+
+  # Note: cargo-leptos watch mode requires version matching - install manually if needed:
+  #   cargo install cargo-leptos wasm-bindgen-cli
+  # For now, you can run the server directly with:
+  #   cargo build -p loaa-web --features ssr && ./target/debug/loaa-web
 
   dotenv.disableHint = true;
 

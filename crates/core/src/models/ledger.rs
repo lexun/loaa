@@ -35,6 +35,10 @@ pub struct LedgerEntry {
     #[serde(default)]
     pub reported_by: Option<String>,
     pub created_at: DateTime<Utc>,
+    /// When the task was actually completed (may differ from created_at for backdated entries)
+    /// Defaults to created_at for backwards compatibility
+    #[serde(default)]
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 // Custom serialization for UUID to ensure it's stored as a string
@@ -72,10 +76,13 @@ impl LedgerEntry {
             task_id: None,
             reported_by: None,
             created_at: Utc::now(),
+            completed_at: None,
         }
     }
 
     /// Create an earned entry with additional metadata for approval workflow
+    /// If completed_at is None, defaults to now (current behavior)
+    /// If completed_at is Some, uses that date for when the task was actually done
     pub fn earned_with_metadata(
         kid_id: Uuid,
         amount: Decimal,
@@ -83,6 +90,7 @@ impl LedgerEntry {
         status: TransactionStatus,
         task_id: Option<Uuid>,
         reported_by: Option<String>,
+        completed_at: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -94,6 +102,7 @@ impl LedgerEntry {
             task_id,
             reported_by,
             created_at: Utc::now(),
+            completed_at,
         }
     }
 
@@ -115,6 +124,12 @@ impl LedgerEntry {
     /// Check if this entry is pending approval
     pub fn is_pending(&self) -> bool {
         self.status == TransactionStatus::Pending
+    }
+
+    /// Get the effective completion date (completed_at if set, otherwise created_at)
+    /// Use this for display and sorting by when the task was actually done
+    pub fn effective_completed_at(&self) -> DateTime<Utc> {
+        self.completed_at.unwrap_or(self.created_at)
     }
 }
 

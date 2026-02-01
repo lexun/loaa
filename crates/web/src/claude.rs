@@ -87,7 +87,7 @@ fn get_tools() -> Vec<Value> {
         }),
         json!({
             "name": "complete_task",
-            "description": "Mark a task as complete for a specific kid. This awards them the task's value.",
+            "description": "Mark a task as complete for a specific kid. This awards them the task's value. Supports backdating - if the task was completed in the past (e.g., yesterday), provide completed_at to record the correct date. Backdated completions won't prevent the task from being available today.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -98,6 +98,10 @@ fn get_tools() -> Vec<Value> {
                     "task_id": {
                         "type": "string",
                         "description": "The UUID of the task that was completed"
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "description": "Optional ISO 8601 datetime when the task was actually completed (e.g., '2024-01-15T10:00:00Z' for a specific time, or use relative terms in conversation like 'yesterday'). If not provided, defaults to now."
                     }
                 },
                 "required": ["kid_id", "task_id"]
@@ -134,6 +138,11 @@ When they say they completed a task:
 1. Use list_tasks to find the task they're talking about
 2. Use complete_task to mark it done
 3. Tell them how much they earned!
+
+BACKDATING: If someone says they did a task "yesterday" or on a past date, use the completed_at parameter with an ISO 8601 datetime. For example:
+- "yesterday" → use yesterday's date at noon (e.g., "2024-01-14T12:00:00Z")
+- "two days ago" → calculate that date
+Backdated completions are recorded with the correct date and don't prevent the task from being done again today.
 
 Keep responses short and friendly - these are kids! Use simple language and be encouraging.
 
@@ -223,6 +232,12 @@ async fn execute_tool(
                 .as_str()
                 .ok_or_else(|| anyhow!("Missing task_id"))?;
 
+            // Parse optional completed_at for backdating
+            let completed_at = input["completed_at"]
+                .as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc));
+
             let kid_uuid = uuid::Uuid::parse_str(kid_id)?;
             let task_uuid = uuid::Uuid::parse_str(task_id)?;
 
@@ -238,7 +253,7 @@ async fn execute_tool(
             } else {
                 TransactionStatus::Confirmed
             };
-            let entry = workflow.complete_task_with_status(task_uuid, kid_uuid, status, None).await?;
+            let entry = workflow.complete_task_with_status(task_uuid, kid_uuid, status, None, completed_at).await?;
 
             // Broadcast SSE event for live dashboard updates
             if let Some(ref tx) = state.event_sender {

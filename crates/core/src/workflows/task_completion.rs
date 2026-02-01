@@ -1,7 +1,8 @@
 use crate::db::{TaskRepository, KidRepository, LedgerRepository};
-use crate::models::{LedgerEntry, TransactionStatus};
+use crate::models::{LedgerEntry, TransactionStatus, Cadence};
 use crate::error::Result;
 use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 /// Coordinates task completion workflow:
 /// 1. Mark task as complete (create ledger entry)
@@ -34,19 +35,26 @@ impl TaskCompletionWorkflow {
     ///
     /// Returns the created ledger entry
     pub async fn complete_task(&self, task_id: Uuid, kid_id: Uuid) -> Result<LedgerEntry> {
-        self.complete_task_with_status(task_id, kid_id, TransactionStatus::Confirmed, None).await
+        self.complete_task_with_status(task_id, kid_id, TransactionStatus::Confirmed, None, None).await
     }
 
     /// Complete a task for a kid with specified status and reporter
     ///
     /// - status: Confirmed for parent completions, Pending for kid completions
     /// - reported_by: user_id of who reported the completion (for audit trail)
+    /// - completed_at: optional date when the task was actually completed (for backdating)
+    ///
+    /// When backdating (completed_at is in a previous period):
+    /// - Creates ledger entry with the backdated completion time
+    /// - Does NOT mark the kid in completed_by (since the period has passed)
+    /// - This allows the task to still be available for today
     pub async fn complete_task_with_status(
         &self,
         task_id: Uuid,
         kid_id: Uuid,
         status: TransactionStatus,
         reported_by: Option<String>,
+        completed_at: Option<DateTime<Utc>>,
     ) -> Result<LedgerEntry> {
         // 1. Verify the kid exists
         let _kid = self.kid_repo.get(kid_id).await?;
@@ -59,12 +67,20 @@ impl TaskCompletionWorkflow {
             task.reset();
         }
 
-        // 4. Check if this kid can complete the task
-        if let Err(reason) = task.can_complete(kid_id) {
-            return Err(crate::error::Error::TaskNotAvailable(reason.to_string()));
+        // 4. Determine if this is a backdated completion (from a previous period)
+        let is_backdated = completed_at.map_or(false, |date| {
+            Self::is_from_previous_period(date, task.last_reset, task.cadence)
+        });
+
+        // 5. Check if this kid can complete the task (only for non-backdated)
+        // For backdated completions, we don't check availability since it's a past period
+        if !is_backdated {
+            if let Err(reason) = task.can_complete(kid_id) {
+                return Err(crate::error::Error::TaskNotAvailable(reason.to_string()));
+            }
         }
 
-        // 5. Create ledger entry for the earnings with metadata
+        // 6. Create ledger entry for the earnings with metadata
         let description = format!("Completed: {}", task.name);
         let entry = LedgerEntry::earned_with_metadata(
             kid_id,
@@ -73,13 +89,29 @@ impl TaskCompletionWorkflow {
             status,
             Some(task_id),
             reported_by,
+            completed_at,
         );
         let created_entry = self.ledger_repo.create_entry(entry).await?;
 
-        // 6. Mark this kid as having completed the task
-        task.mark_completed(kid_id);
-        self.task_repo.update(task).await?;
+        // 7. Mark this kid as having completed the task (only for current period)
+        // For backdated completions, don't mark as completed since it's a past period
+        if !is_backdated {
+            task.mark_completed(kid_id);
+            self.task_repo.update(task).await?;
+        }
 
         Ok(created_entry)
+    }
+
+    /// Check if a completion date is from a previous period relative to the task's last reset
+    fn is_from_previous_period(completed_at: DateTime<Utc>, last_reset: DateTime<Utc>, cadence: Cadence) -> bool {
+        match cadence {
+            // OneTime tasks don't have periods, so never consider backdated
+            Cadence::OneTime => false,
+            // For daily tasks, check if completed_at is before the current period started
+            Cadence::Daily => completed_at < last_reset,
+            // For weekly tasks, check if completed_at is before the current period started
+            Cadence::Weekly => completed_at < last_reset,
+        }
     }
 }

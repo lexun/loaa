@@ -115,8 +115,17 @@ pub async fn create_task(
     Ok(created.into())
 }
 
+/// Complete a task for a kid
+/// - completed_at: Optional timestamp for when the task was actually completed (for backdating)
+///   If None, the task is completed as of now
+///   If provided, creates a ledger entry dated to that time
+///   Backdated completions (from a previous period) don't mark the task as unavailable today
 #[server]
-pub async fn complete_task(kid_id: UuidDto, task_id: UuidDto) -> Result<(), ServerFnError> {
+pub async fn complete_task(
+    kid_id: UuidDto,
+    task_id: UuidDto,
+    completed_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(), ServerFnError> {
     let db = get_db().await?;
 
     let kid_uuid = Uuid::from_str(&kid_id)
@@ -148,7 +157,7 @@ pub async fn complete_task(kid_id: UuidDto, task_id: UuidDto) -> Result<(), Serv
     let ledger_repo = LedgerRepository::new(db.client.clone());
 
     let workflow = TaskCompletionWorkflow::new(task_repo, kid_repo, ledger_repo);
-    workflow.complete_task_with_status(task_uuid, kid_uuid, status, user_id).await
+    workflow.complete_task_with_status(task_uuid, kid_uuid, status, user_id, completed_at).await
         .map_err(|e| ServerFnError::new(format!("Failed to complete task: {}", e)))?;
 
     Ok(())

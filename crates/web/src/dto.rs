@@ -56,6 +56,9 @@ pub struct LedgerEntryDto {
     pub status: TransactionStatusDto,
     pub task_id: Option<UuidDto>,
     pub created_at: DateTime<Utc>,
+    /// When the task was actually completed (for backdated entries)
+    /// If None, use created_at
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 // EntryType DTO
@@ -191,6 +194,7 @@ pub mod convert {
                 status: entry.status.into(),
                 task_id: entry.task_id.map(|id| id.to_string()),
                 created_at: entry.created_at,
+                completed_at: entry.completed_at,
             }
         }
     }

@@ -474,7 +474,9 @@ fn DashboardContent() -> impl IntoView {
                                             let entry_id = entry.id.clone();
                                             let entry_id_approve = entry_id.clone();
                                             let entry_id_reject = entry_id.clone();
-                                            let time_ago = format_time_ago(entry.created_at);
+                                            // Use completed_at if available (for backdated entries), otherwise created_at
+                                            let effective_date = entry.completed_at.unwrap_or(entry.created_at);
+                                            let time_ago = format_time_ago(effective_date);
 
                                             let handle_approve = move |_| {
                                                 let id = entry_id_approve.clone();
@@ -551,7 +553,9 @@ fn DashboardContent() -> impl IntoView {
                                             };
                                             let is_pending = entry.status == TransactionStatusDto::Pending;
                                             let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
-                                            let time_ago = format_time_ago(entry.created_at);
+                                            // Use completed_at if available (for backdated entries), otherwise created_at
+                                            let effective_date = entry.completed_at.unwrap_or(entry.created_at);
+                                            let time_ago = format_time_ago(effective_date);
                                             let pending_class = if is_pending { "activity-item pending" } else { "activity-item" };
                                             view! {
                                                 <li class=pending_class>
@@ -894,8 +898,10 @@ pub fn LedgerPage() -> impl IntoView {
                                                                             EntryTypeDto::Penalty => "Penalty",
                                                                         };
                                                                         let sign = if entry.amount >= rust_decimal::Decimal::ZERO { "+" } else { "" };
-                                                                        let date_str = entry.created_at.format("%Y-%m-%d").to_string();
-                                                                        let time_str = entry.created_at.format("%H:%M").to_string();
+                                                                        // Use completed_at if available (for backdated entries), otherwise created_at
+                                                                        let effective_date = entry.completed_at.unwrap_or(entry.created_at);
+                                                                        let date_str = effective_date.format("%Y-%m-%d").to_string();
+                                                                        let time_str = effective_date.format("%H:%M").to_string();
 
                                                                         view! {
                                                                             <tr class="ledger-row">
