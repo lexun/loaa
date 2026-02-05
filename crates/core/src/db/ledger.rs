@@ -50,8 +50,9 @@ impl LedgerRepository {
     }
 
     pub async fn get_ledger(&self, kid_id: Uuid) -> Result<Ledger> {
+        // Sort by effective date: completed_at if backdated, otherwise created_at
         let mut response = self.db
-            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) = string::lowercase($kid_id) ORDER BY created_at DESC")
+            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) = string::lowercase($kid_id) ORDER BY (completed_at ?? created_at) DESC")
             .bind(("kid_id", kid_id.to_string()))
             .await?;
 
@@ -61,8 +62,9 @@ impl LedgerRepository {
     }
 
     pub async fn list_entries(&self, kid_id: Uuid) -> Result<Vec<LedgerEntry>> {
+        // Sort by effective date: completed_at if backdated, otherwise created_at
         let mut response = self.db
-            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) = string::lowercase($kid_id) ORDER BY created_at DESC")
+            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) = string::lowercase($kid_id) ORDER BY (completed_at ?? created_at) DESC")
             .bind(("kid_id", kid_id.to_string()))
             .await?;
 
@@ -89,7 +91,7 @@ impl LedgerRepository {
         let kid_id_strs: Vec<String> = kid_ids.iter().map(|id| id.to_string().to_lowercase()).collect();
 
         let mut response = self.db
-            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) IN $kid_ids AND status = 'Pending' ORDER BY created_at DESC")
+            .query("SELECT * FROM ledger_entry WHERE string::lowercase(kid_id) IN $kid_ids AND status = 'Pending' ORDER BY (completed_at ?? created_at) DESC")
             .bind(("kid_ids", kid_id_strs))
             .await?;
 

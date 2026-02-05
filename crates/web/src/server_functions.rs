@@ -237,7 +237,8 @@ pub async fn get_recent_activity(limit: usize) -> Result<Vec<LedgerEntryDto>, Se
         all_entries.extend(entries);
     }
 
-    all_entries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    // Sort by effective date: completed_at if backdated, otherwise created_at
+    all_entries.sort_by(|a, b| b.effective_completed_at().cmp(&a.effective_completed_at()));
     all_entries.truncate(limit);
 
     Ok(all_entries.into_iter().map(Into::into).collect())
