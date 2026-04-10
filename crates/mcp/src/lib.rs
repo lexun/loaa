@@ -9,7 +9,8 @@ use anyhow::Result;
 use loaa_core::db::{init_database_with_config, Database, KidRepository, LedgerRepository, TaskRepository, PenaltyRepository, UserRepository};
 use loaa_core::config::DatabaseConfig;
 use loaa_core::events::{DataEvent, EventSender, broadcast_event};
-use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Penalty, Task};
+use chrono::{DateTime, Utc};
+use loaa_core::models::{Cadence, EntryType, Kid, LedgerEntry, Penalty, Task, TransactionStatus};
 use loaa_core::workflows::TaskCompletionWorkflow;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -103,6 +104,9 @@ struct CompleteTaskParams {
     task_id: String,
     #[schemars(description = "ID of the kid completing the task")]
     kid_id: String,
+    #[schemars(description = "Optional ISO 8601 datetime for when the task was actually completed (for backdating). If omitted, defaults to now.")]
+    #[serde(default)]
+    completed_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
@@ -553,9 +557,20 @@ impl LoaaServer {
             McpError::invalid_request(format!("Invalid kid ID: {}", e), None)
         })?;
 
+        let completed_at = params
+            .completed_at
+            .map(|s| {
+                DateTime::parse_from_rfc3339(&s)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| {
+                        McpError::invalid_request(format!("Invalid completed_at datetime: {}", e), None)
+                    })
+            })
+            .transpose()?;
+
         let workflow = self.workflow.read().await;
         let entry = workflow
-            .complete_task(task_uuid, kid_uuid)
+            .complete_task_with_status(task_uuid, kid_uuid, TransactionStatus::Confirmed, None, completed_at)
             .await
             .map_err(|e| {
                 McpError::internal_error("workflow_error", Some(json!({"error": e.to_string()})))
