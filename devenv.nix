@@ -58,9 +58,6 @@
     };
   };
 
-  # Enable process-compose with TUI
-  process.managers.process-compose.enable = true;
-
   git-hooks.hooks.single-line-commit = {
     enable = true;
     name = "single-line commit";
